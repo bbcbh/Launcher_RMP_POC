@@ -98,7 +98,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 	protected HashMap<String, LineCollectionEntry> movementCollections = new HashMap<>();
 	protected HashMap<Integer, ArrayList<Integer>> visitor_pids_by_loc = new HashMap<>();
 	protected int lastMovement_update = -1;
-		
+
 	// Output
 	protected static final String key_pop_size = "EXPORT_POP_SIZE";
 	protected static final String FILENAME_EXPORT_POP_SIZE = "Pop_size_%d_%d.csv";
@@ -107,9 +107,9 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 
 	public Runnable_MetaPopulation_Transmission_RMP_MultiInfection(long cMap_seed, long sim_seed, Properties prop) {
 		super(cMap_seed, sim_seed, null, prop, NUM_INF, NUM_SITE, NUM_ACT);
-		this.setBaseDir((File) prop.get(Simulation_MetaPop.PROP_BASEDIR));
+		this.setBaseDir((File) prop.get(Simulation_RMP_POC.PROP_BASEDIR));
 		this.setBaseProp(prop);
-		this.dir_demographic = new File(baseProp.getProperty(Simulation_MetaPop.PROP_CONTACT_MAP_LOC));
+		this.dir_demographic = new File(baseProp.getProperty(Simulation_RMP_POC.PROP_CONTACT_MAP_LOC));
 
 		Pattern pattern_movement_csv = Pattern.compile(Runnable_Demographic_Generation.FILENAME_FORMAT_MOVEMENT
 				.replaceAll("%d", Long.toString(cMap_seed)).replaceAll("%s", "(\\\\d+_\\\\d+)"));
@@ -132,8 +132,6 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 				e.printStackTrace(System.err);
 			}
 		}
-
-		
 
 	}
 
@@ -210,8 +208,6 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 		}
 		// Movement
 		loadMovement(currentTime);
-
-		
 
 		// Store pop size
 		if (currentTime % nUM_TIME_STEPS_PER_SNAP == 0) {
@@ -304,8 +300,6 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 			}
 		}
 
-		
-
 		for (LineCollectionEntry movementEntry : movementCollections.values()) {
 			try {
 				movementEntry.closeReader();
@@ -339,7 +333,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 			double[] testRateDefMatch = null;
 			int pid = pid_t;
 			for (double[] testRateDef : testRateDefs) {
-				
+
 				int gIncl = (int) testRateDef[FIELD_TESTING_RATE_BY_RISK_CATEGORIES_GENDER_INCLUDE_INDEX];
 				int sIncl = (int) testRateDef[FIELD_TESTING_RATE_BY_RISK_CATEGORIES_SITE_INCLUDE_INDEX];
 				int iIncl = (int) testRateDef[FIELD_TESTING_RATE_BY_RISK_CATEGORIES_INF_INCLUDE_INDEX];
@@ -352,7 +346,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 						"Warning!. Mating test defintion for [%d,%d,%d,%d] NOT found. Use default test person instead.\n",
 						currentTime, pid, infIncl, siteIncl);
 				super.testPerson(currentTime, pid, infIncl, siteIncl, cumul_treatment_by_person);
-			} else {							
+			} else {
 				for (int infId = 0; infId < NUM_INF; infId++) {
 					if ((infIncl & 1 << infId) != 0) {
 						boolean applyTreatment = false;
@@ -384,32 +378,89 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 							}
 						}
 						if (applyTreatment) {
-							
-							//TODO: Set up multiple delay option here
-							int numTreatmentDelayOption = (testRateDefMatch.length
-									- FIELD_TESTING_TREATMENT_DELAY_START) / 2;
 
-							double pTreat = RNG.nextDouble();
-							int pt = Arrays.binarySearch(testRateDefMatch, FIELD_TESTING_TREATMENT_DELAY_START,
-									FIELD_TESTING_TREATMENT_DELAY_START + numTreatmentDelayOption, pTreat);
+							if (testRateDefMatch[FIELD_TESTING_TREATMENT_DELAY_START] < 0) {
+								// Annual_Coverage, -num_delay_option, Prob_Option_0, Prob_Option_1,
+								// ... Prob_Treatment_Delay_Range_0, Prob_Treatment_Delay_Range_1 ...
+								// Delay_Range...,
+								int numDelayOpt = (int) -testRateDefMatch[FIELD_TESTING_TREATMENT_DELAY_START];
+								int delayOpt_length = (int) (testRateDefMatch.length
+										- FIELD_TESTING_TREATMENT_DELAY_START - numDelayOpt) / (numDelayOpt+1);
 
-							if (pt < 0) {
-								pt = ~pt;
-							}
-							if ((pt + numTreatmentDelayOption + 1) < testRateDefMatch.length) { // Miss out on treatment
-																								// otherwise
-								int delay = (int) testRateDefMatch[pt + numTreatmentDelayOption];
-								delay += RNG.nextInt((int) testRateDefMatch[pt + numTreatmentDelayOption + 1] - delay);
-								if (delay <= 1) {
-									cumul_treatment_by_person[infId][getPersonGrp(pid)]++;
-									applyTreatment(currentTime, infId, pid, inf_stage);
-								} else {
-									ArrayList<Object[]> sch_treat = schedule_treatment.get(currentTime + delay);
-									if (sch_treat == null) {
-										sch_treat = new ArrayList<>();
-										schedule_treatment.put(currentTime + delay, sch_treat);
+								double pDelayOpt = RNG.nextDouble();
+								int option_pt = Arrays.binarySearch(testRateDefMatch,
+										FIELD_TESTING_TREATMENT_DELAY_START + 1,
+										FIELD_TESTING_TREATMENT_DELAY_START + numDelayOpt, pDelayOpt);
+
+								if (option_pt < 0) {
+									option_pt = ~option_pt;
+								}
+								
+								option_pt -= FIELD_TESTING_TREATMENT_DELAY_START + 1;																														
+
+								int opt_start = FIELD_TESTING_TREATMENT_DELAY_START +1 + numDelayOpt + 
+										option_pt * delayOpt_length;
+								int opt_end = opt_start + delayOpt_length;
+
+								pDelayOpt = RNG.nextDouble();
+
+								int delay_pt = Arrays.binarySearch(testRateDefMatch, opt_start, opt_end, pDelayOpt);
+
+								if (delay_pt < 0) {
+									delay_pt = ~delay_pt;
+								}
+								
+								delay_pt += (numDelayOpt - option_pt) * delayOpt_length;
+
+								if ((delay_pt + 1) < testRateDefMatch.length) {
+									// Miss out on treatment otherwise
+									int delay = (int) testRateDefMatch[delay_pt];
+									delay += RNG.nextInt((int) testRateDefMatch[delay_pt + 1] - delay);
+									if (delay <= 1) {
+										cumul_treatment_by_person[infId][getPersonGrp(pid)]++;
+										applyTreatment(currentTime, infId, pid, inf_stage);
+									} else {
+										ArrayList<Object[]> sch_treat = schedule_treatment.get(currentTime + delay);
+										if (sch_treat == null) {
+											sch_treat = new ArrayList<>();
+											schedule_treatment.put(currentTime + delay, sch_treat);
+										}
+										sch_treat.add(
+												new Object[] { new int[] { infId, pid }, cumul_treatment_by_person });
 									}
-									sch_treat.add(new Object[] { new int[] { infId, pid }, cumul_treatment_by_person });
+								}
+
+							} else {
+								// One delay option
+								// Annual_Coverage, Prob_Treatment_Delay_Range_0... Delay_Range_0...,
+								int numTreatmentDelayOption = (testRateDefMatch.length
+										- FIELD_TESTING_TREATMENT_DELAY_START) / 2;
+
+								double pTreat = RNG.nextDouble();
+								int pt = Arrays.binarySearch(testRateDefMatch, FIELD_TESTING_TREATMENT_DELAY_START,
+										FIELD_TESTING_TREATMENT_DELAY_START + numTreatmentDelayOption, pTreat);
+
+								if (pt < 0) {
+									pt = ~pt;
+								}
+								if ((pt + numTreatmentDelayOption + 1) < testRateDefMatch.length) { // Miss out on
+																									// treatment
+																									// otherwise
+									int delay = (int) testRateDefMatch[pt + numTreatmentDelayOption];
+									delay += RNG
+											.nextInt((int) testRateDefMatch[pt + numTreatmentDelayOption + 1] - delay);
+									if (delay <= 1) {
+										cumul_treatment_by_person[infId][getPersonGrp(pid)]++;
+										applyTreatment(currentTime, infId, pid, inf_stage);
+									} else {
+										ArrayList<Object[]> sch_treat = schedule_treatment.get(currentTime + delay);
+										if (sch_treat == null) {
+											sch_treat = new ArrayList<>();
+											schedule_treatment.put(currentTime + delay, sch_treat);
+										}
+										sch_treat.add(
+												new Object[] { new int[] { infId, pid }, cumul_treatment_by_person });
+									}
 								}
 							}
 						}

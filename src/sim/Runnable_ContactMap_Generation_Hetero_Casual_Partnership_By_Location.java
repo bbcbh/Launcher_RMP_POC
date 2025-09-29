@@ -49,7 +49,7 @@ public class Runnable_ContactMap_Generation_Hetero_Casual_Partnership_By_Locatio
 	public void run() {
 		
 		long tic = System.currentTimeMillis();
-		File baseDir = (File) getLoadedProperties().get(Simulation_MetaPop.PROP_BASEDIR);
+		File baseDir = (File) getLoadedProperties().get(Simulation_RMP_POC.PROP_BASEDIR);
 
 		// Load demographic file
 		loadCollection(baseDir,
