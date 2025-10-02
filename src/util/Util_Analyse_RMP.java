@@ -16,10 +16,10 @@ import test.Test_Common_Static_Vars;
 
 public class Util_Analyse_RMP {
 
-	public static void extract_num_infection_to_csv(File scenario_dirs_incl) throws IOException, FileNotFoundException {
-		extract_num_infection_to_csv(new File[] {scenario_dirs_incl}, scenario_dirs_incl);
+	public static void extract_num_infection_to_csv(File scenario_dirs_incl, int[][] colIndex) throws IOException, FileNotFoundException {
+		extract_num_infection_to_csv(new File[] {scenario_dirs_incl}, scenario_dirs_incl, colIndex);
 	}
-	public static void extract_num_infection_to_csv(File[] scenario_dirs_incl, File output_dir) throws IOException, FileNotFoundException {
+	public static void extract_num_infection_to_csv(File[] scenario_dirs_incl, File output_dir,int[][] colIndex ) throws IOException, FileNotFoundException {
 		Comparator<File> cmp_file_suffix = generate_file_comparator_by_suffix();
 		
 		ArrayList<ArrayList<StringBuilder>> lines_all_inf = new ArrayList<>();
@@ -112,7 +112,7 @@ public class Util_Analyse_RMP {
 								}
 							} else {
 								int numInf = 0;
-								for (int col : Test_Common_Static_Vars.col_index[p]) {
+								for (int col : colIndex[p]) {
 									numInf += Integer.parseInt(line_ent[col]);
 								}
 								strBuild.append(numInf);
