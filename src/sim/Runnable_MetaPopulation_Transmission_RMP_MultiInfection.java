@@ -74,18 +74,9 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 	private static final int NUM_INF = 4;
 	private static final int NUM_SITE = 3;
 	private static final int NUM_ACT = 1;
-	private static final int NUM_GRP_PER_GENDER = 3;
+	
 
 	private static final int[] COL_SEL_INF_GENDER = null;
-
-//	private static final int[] COL_SEL_INF_GENDER_SITE_AT = new int[] { // 
-//	        97, 99, 113, 115, 129, 131, // NG Male
-//			145, 146, 161, 162, 177, 178, // NG Female
-//			193, 195, 209, 211, 225, 227, // CT Male
-//			241, 242, 257, 258, 273, 274, // CT Female
-//			289, 291, 305, 307, 321, 323, // TV Male
-//			337, 338, 353, 354, 369, 370, // TV Female
-//	};
 
 	// For infection tracking
 	// Key = pid, V = [inf_id][infection_start_time_1,
@@ -107,7 +98,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 	private boolean preloadFile = false;
 
 	public Runnable_MetaPopulation_Transmission_RMP_MultiInfection(long cMap_seed, long sim_seed, Properties prop) {
-		super(cMap_seed, sim_seed, null, prop, NUM_INF, NUM_SITE, NUM_ACT);
+		super(cMap_seed, sim_seed, null, prop, NUM_INF, NUM_SITE, NUM_ACT);		
 		this.setBaseDir((File) prop.get(Simulation_RMP_POC.PROP_BASEDIR));
 		this.setBaseProp(prop);
 		this.dir_demographic = new File(baseProp.getProperty(Simulation_RMP_POC.PROP_CONTACT_MAP_LOC));
@@ -171,7 +162,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 		int[] indiv_stat = indiv_map.get(personId);
 		int grp = indiv_stat[INDIV_MAP_CURRENT_GRP];
 		if (grp < 0) { // Expired person
-			grp = ((indiv_stat[INDIV_MAP_ENTER_GRP] / NUM_GRP_PER_GENDER) + 1) * NUM_GRP_PER_GENDER - 1;
+			grp = ((indiv_stat[INDIV_MAP_ENTER_GRP] / (NUM_GRP/2)) + 1) * (NUM_GRP/2) - 1;
 		}
 		return grp;
 	}
@@ -359,7 +350,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 			}
 			if (testRateDefMatch == null) {
 				System.err.printf(
-						"Warning!. Mating test defintion for [%d,%d,%d,%d] NOT found. Use default test person instead.\n",
+						"Warning!. Matrix test defintion for [%d,%d,%d,%d] NOT found. Use default test person instead.\n",
 						currentTime, pid, infIncl, siteIncl);
 				super.testPerson(currentTime, pid, infIncl, siteIncl, cumul_treatment_by_person);
 			} else {
@@ -426,7 +417,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 			}// End of if (testRateDefMatch == null) {... } else {... 
 		}// End of if (pid_t < 0) {...} else {
 		if (retest_candidate) {			
-			double[] retestRaDefMatch = null;
+			double[] retestDefMatch = null;
 			double[][] testRateDefs = (double[][]) getRunnable_fields()[RUNNABLE_FIELD_TRANSMISSION_TESTING_RATE_BY_RISK_CATEGORIES];
 			int pid = Math.abs(pid_t);
 			for (double[] testRateDef : testRateDefs) {
@@ -436,25 +427,27 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 				if ((1 << getPersonGrp(pid) & gIncl) != 0 
 						&& (sIncl & siteIncl) != 0 && (iIncl & infIncl) != 0) {
 					if (testRateDef[FIELD_TESTING_RATE_COVERAGE] < 0) {
-						retestRaDefMatch = testRateDef;
+						retestDefMatch = testRateDef;
 					}
 				}
 			}		
 			// Retesting
-			int numRetest = (int) -retestRaDefMatch[FIELD_TESTING_RATE_COVERAGE];
+			int numRetest = (int) -retestDefMatch[FIELD_TESTING_RATE_COVERAGE];
 			int last_test_time = currentTime;
 			while (numRetest > 0) {			
-				int retest_pt = getDelayPt(retestRaDefMatch);
-				if ((retest_pt + 1) < retestRaDefMatch.length) {
-					int delay = (int) retestRaDefMatch[retest_pt];
-					delay += RNG.nextInt((int) retestRaDefMatch[retest_pt + 1] - delay);
+				int retest_pt = getDelayPt(retestDefMatch);
+				if ((retest_pt + 1) < retestDefMatch.length) {
+					int delay = (int) retestDefMatch[retest_pt];
+					delay += RNG.nextInt((int) retestDefMatch[retest_pt + 1] - delay);
 					last_test_time += delay;
 					ArrayList<int[]> sch_test = schedule_testing.get(last_test_time);
 					if (sch_test == null) {
 						sch_test = new ArrayList<>();
 						schedule_testing.put(last_test_time, sch_test);
 					}
-					int[] test_pair = new int[] { pid, infIncl, siteIncl };
+					int[] test_pair = new int[] { pid, 
+						(int) retestDefMatch[FIELD_TESTING_RATE_BY_RISK_CATEGORIES_INF_INCLUDE_INDEX], 
+						(int) retestDefMatch[FIELD_TESTING_RATE_BY_RISK_CATEGORIES_SITE_INCLUDE_INDEX] };
 					int pt_t = Collections.binarySearch(sch_test, test_pair, new Comparator<int[]>() {
 						@Override
 						public int compare(int[] o1, int[] o2) {
@@ -783,7 +776,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 					reach_max_age_grp = true;
 				}
 
-				if ((checkGrp % NUM_GRP_PER_GENDER) + 1 < NUM_GRP_PER_GENDER) {
+				if ((checkGrp % (NUM_GRP/2)) + 1 < (NUM_GRP/2)) {
 					addEntryToSchduleGrpChange(changeTime, new int[] { pid, checkGrp, nextGrp });
 				} else {
 					addEntryToSchduleGrpChange(changeTime, new int[] { pid, checkGrp, -1 });
