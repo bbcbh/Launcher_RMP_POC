@@ -30,11 +30,13 @@ public class Runnable_ContactMap_Generation_Hetero_Casual_Partnership_By_Locatio
 
 	protected ArrayList<int[]> extra_partnership_formed = new ArrayList<>();
 	private RandomGenerator RNG;
+	private int NUM_AGE_GRP;
 
 	public Runnable_ContactMap_Generation_Hetero_Casual_Partnership_By_Location(long mapSeed, Properties loadedProperties) {
 		this.mapSeed = mapSeed;
 		this.loadedProperties = loadedProperties;
 		this.RNG = new MersenneTwisterRandomGenerator(mapSeed);
+		this.NUM_AGE_GRP = (int) loadedProperties.get("NUM_AGE_GRP");
 
 	}
 
@@ -100,7 +102,7 @@ public class Runnable_ContactMap_Generation_Hetero_Casual_Partnership_By_Locatio
 
 						indiv_stat[Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INDIV_MAP_CURRENT_LOC] = tar_loc;
 						int gender = indiv_stat[Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INDIV_MAP_ENTER_GRP]
-								/ 3;
+								/ NUM_AGE_GRP;
 
 						int[] extra_stat = seek_extra_partners.get(pid);
 						if (extra_stat != null && extra_stat[0] > 0) {
@@ -135,7 +137,7 @@ public class Runnable_ContactMap_Generation_Hetero_Casual_Partnership_By_Locatio
 				if (extra_sought_ent_seeker != null) {
 					int[] indiv_stat_seeker = indiv_map.get(pid_seeker);
 					int gender_seeker = indiv_stat_seeker[Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INDIV_MAP_ENTER_GRP]
-							/ 3;
+							/ NUM_AGE_GRP;
 					int common_loc = indiv_stat_seeker[Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INDIV_MAP_CURRENT_LOC];
 					if (indiv_stat_seeker[Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INDIV_MAP_EXIT_POP_AT] != -1
 									&& indiv_stat_seeker[Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INDIV_MAP_EXIT_POP_AT] < currentTime) {
@@ -158,7 +160,7 @@ public class Runnable_ContactMap_Generation_Hetero_Casual_Partnership_By_Locatio
 								for(int pid_r : new int[] {pid_seeker, partner_pid}) {
 									seek_extra_partners.get(pid_r)[0]--;									
 									if(seek_extra_partners.get(pid_r)[0] == 0) {
-										int gender_r = indiv_map.get(pid_r)[Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INDIV_MAP_ENTER_GRP]/3;										
+										int gender_r = indiv_map.get(pid_r)[Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INDIV_MAP_ENTER_GRP]/NUM_AGE_GRP;										
 										seek_extra_partners.remove(pid_r);
 										seek_extra_by_loc = seek_extra_by_gender_loc.get(gender_r);
 										seek_extra_by_loc.get(common_loc)
@@ -212,7 +214,7 @@ public class Runnable_ContactMap_Generation_Hetero_Casual_Partnership_By_Locatio
 			while (time_from <= currentTime) {
 				int pid = Integer.parseInt(ent_sp[1]);
 				int gender = indiv_map
-						.get(pid)[Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INDIV_MAP_ENTER_GRP] / 3;
+						.get(pid)[Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INDIV_MAP_ENTER_GRP] / NUM_AGE_GRP;
 
 				int partner_sought = Integer.parseInt(ent_sp[2]);
 				int time_until = time_from + AbstractIndividualInterface.ONE_YEAR_INT;
