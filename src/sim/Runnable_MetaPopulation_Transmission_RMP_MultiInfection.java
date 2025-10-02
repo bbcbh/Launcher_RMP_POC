@@ -78,7 +78,8 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 
 	private static final int[] COL_SEL_INF_GENDER = null;
 
-//	private static final int[] COL_SEL_INF_GENDER_SITE_AT = new int[] { 97, 99, 113, 115, 129, 131, // NG Male
+//	private static final int[] COL_SEL_INF_GENDER_SITE_AT = new int[] { // 
+//	        97, 99, 113, 115, 129, 131, // NG Male
 //			145, 146, 161, 162, 177, 178, // NG Female
 //			193, 195, 209, 211, 225, 227, // CT Male
 //			241, 242, 257, 258, 273, 274, // CT Female
@@ -325,20 +326,35 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 	@Override
 	protected void testPerson(int currentTime, int pid_t, int infIncl, int siteIncl,
 			int[][] cumul_treatment_by_person) {
-		if (pid_t < 0) { // Assume test and treat as normal with symptoms
+
+		boolean retest_candidate = false;
+
+		if (pid_t < 0) { // Assume test and treat as normal with symptoms			
+			int[] preTreatCount = new int[NUM_INF];
+			for (int infId = 0; infId < NUM_INF; infId++) {
+				preTreatCount[infId] = cumul_treatment_by_person[infId][getPersonGrp(-pid_t)];
+			}
 			super.testPerson(currentTime, pid_t, infIncl, siteIncl, cumul_treatment_by_person);
+			
+			for (int infId = 0; infId < NUM_INF && !retest_candidate; infId++) {
+				retest_candidate |= preTreatCount[infId] != cumul_treatment_by_person[infId][getPersonGrp(-pid_t)];
+			}
 		} else {
 			double[][] testRateDefs = (double[][]) getRunnable_fields()[RUNNABLE_FIELD_TRANSMISSION_TESTING_RATE_BY_RISK_CATEGORIES];
 			// Check which testRateDef fit
 			double[] testRateDefMatch = null;
+
 			int pid = pid_t;
 			for (double[] testRateDef : testRateDefs) {
 
 				int gIncl = (int) testRateDef[FIELD_TESTING_RATE_BY_RISK_CATEGORIES_GENDER_INCLUDE_INDEX];
 				int sIncl = (int) testRateDef[FIELD_TESTING_RATE_BY_RISK_CATEGORIES_SITE_INCLUDE_INDEX];
 				int iIncl = (int) testRateDef[FIELD_TESTING_RATE_BY_RISK_CATEGORIES_INF_INCLUDE_INDEX];
+
 				if ((1 << getPersonGrp(pid) & gIncl) != 0 && sIncl == siteIncl && iIncl == infIncl) {
-					testRateDefMatch = testRateDef;
+					if (testRateDef[FIELD_TESTING_RATE_COVERAGE] >= 0) {
+						testRateDefMatch = testRateDef;
+					}
 				}
 			}
 			if (testRateDefMatch == null) {
@@ -376,100 +392,133 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 									}
 								}
 							}
-						}
+						}						
 						if (applyTreatment) {
+							int treatment_time;
+							int delay_pt = getDelayPt(testRateDefMatch);
 
-							if (testRateDefMatch[FIELD_TESTING_TREATMENT_DELAY_START] < 0) {
-								// Annual_Coverage, -num_delay_option, Prob_Option_0, Prob_Option_1,
-								// ... Prob_Treatment_Delay_Range_0, Prob_Treatment_Delay_Range_1 ...
-								// Delay_Range...,
-								int numDelayOpt = (int) -testRateDefMatch[FIELD_TESTING_TREATMENT_DELAY_START];
-								int delayOpt_length = (int) (testRateDefMatch.length
-										- FIELD_TESTING_TREATMENT_DELAY_START - numDelayOpt) / (numDelayOpt+1);
+							if ((delay_pt + 1) < testRateDefMatch.length) {
+								// Miss out on treatment otherwise
+								int delay = (int) testRateDefMatch[delay_pt];
+								delay += RNG.nextInt((int) testRateDefMatch[delay_pt + 1] - delay);
+								if (delay <= 1) {
+									cumul_treatment_by_person[infId][getPersonGrp(pid)]++;
+									applyTreatment(currentTime, infId, pid, inf_stage);
+									treatment_time = currentTime;
+								} else {
+									ArrayList<Object[]> sch_treat = schedule_treatment.get(currentTime + delay);
+									if (sch_treat == null) {
+										sch_treat = new ArrayList<>();
+										schedule_treatment.put(currentTime + delay, sch_treat);
 
-								double pDelayOpt = RNG.nextDouble();
-								int option_pt = Arrays.binarySearch(testRateDefMatch,
-										FIELD_TESTING_TREATMENT_DELAY_START + 1,
-										FIELD_TESTING_TREATMENT_DELAY_START + numDelayOpt, pDelayOpt);
-
-								if (option_pt < 0) {
-									option_pt = ~option_pt;
-								}
-								
-								option_pt -= FIELD_TESTING_TREATMENT_DELAY_START + 1;																														
-
-								int opt_start = FIELD_TESTING_TREATMENT_DELAY_START +1 + numDelayOpt + 
-										option_pt * delayOpt_length;
-								int opt_end = opt_start + delayOpt_length;
-
-								pDelayOpt = RNG.nextDouble();
-
-								int delay_pt = Arrays.binarySearch(testRateDefMatch, opt_start, opt_end, pDelayOpt);
-
-								if (delay_pt < 0) {
-									delay_pt = ~delay_pt;
-								}
-								
-								delay_pt += (numDelayOpt - option_pt) * delayOpt_length;
-
-								if ((delay_pt + 1) < testRateDefMatch.length) {
-									// Miss out on treatment otherwise
-									int delay = (int) testRateDefMatch[delay_pt];
-									delay += RNG.nextInt((int) testRateDefMatch[delay_pt + 1] - delay);
-									if (delay <= 1) {
-										cumul_treatment_by_person[infId][getPersonGrp(pid)]++;
-										applyTreatment(currentTime, infId, pid, inf_stage);
-									} else {
-										ArrayList<Object[]> sch_treat = schedule_treatment.get(currentTime + delay);
-										if (sch_treat == null) {
-											sch_treat = new ArrayList<>();
-											schedule_treatment.put(currentTime + delay, sch_treat);
-										}
-										sch_treat.add(
-												new Object[] { new int[] { infId, pid }, cumul_treatment_by_person });
 									}
-								}
+									sch_treat.add(new Object[] { new int[] { infId, pid }, cumul_treatment_by_person });
 
+									treatment_time = currentTime + delay;
+								}
 							} else {
-								// One delay option
-								// Annual_Coverage, Prob_Treatment_Delay_Range_0... Delay_Range_0...,
-								int numTreatmentDelayOption = (testRateDefMatch.length
-										- FIELD_TESTING_TREATMENT_DELAY_START) / 2;
-
-								double pTreat = RNG.nextDouble();
-								int pt = Arrays.binarySearch(testRateDefMatch, FIELD_TESTING_TREATMENT_DELAY_START,
-										FIELD_TESTING_TREATMENT_DELAY_START + numTreatmentDelayOption, pTreat);
-
-								if (pt < 0) {
-									pt = ~pt;
-								}
-								if ((pt + numTreatmentDelayOption + 1) < testRateDefMatch.length) { // Miss out on
-																									// treatment
-																									// otherwise
-									int delay = (int) testRateDefMatch[pt + numTreatmentDelayOption];
-									delay += RNG
-											.nextInt((int) testRateDefMatch[pt + numTreatmentDelayOption + 1] - delay);
-									if (delay <= 1) {
-										cumul_treatment_by_person[infId][getPersonGrp(pid)]++;
-										applyTreatment(currentTime, infId, pid, inf_stage);
-									} else {
-										ArrayList<Object[]> sch_treat = schedule_treatment.get(currentTime + delay);
-										if (sch_treat == null) {
-											sch_treat = new ArrayList<>();
-											schedule_treatment.put(currentTime + delay, sch_treat);
-										}
-										sch_treat.add(
-												new Object[] { new int[] { infId, pid }, cumul_treatment_by_person });
-									}
-								}
+								treatment_time = -1; // Miss out on treatment
 							}
-						}
+							retest_candidate |= treatment_time != -1;
+						}// End of if (applyTreatment) {
+					}// End of if ((infIncl & 1 << infId) != 0) {
+				}// End of for (int infId = 0; infId < NUM_INF; infId++) {
+			}// End of if (testRateDefMatch == null) {... } else {... 
+		}// End of if (pid_t < 0) {...} else {
+		if (retest_candidate) {			
+			double[] retestRaDefMatch = null;
+			double[][] testRateDefs = (double[][]) getRunnable_fields()[RUNNABLE_FIELD_TRANSMISSION_TESTING_RATE_BY_RISK_CATEGORIES];
+			int pid = Math.abs(pid_t);
+			for (double[] testRateDef : testRateDefs) {
+				int gIncl = (int) testRateDef[FIELD_TESTING_RATE_BY_RISK_CATEGORIES_GENDER_INCLUDE_INDEX];
+				int sIncl = (int) testRateDef[FIELD_TESTING_RATE_BY_RISK_CATEGORIES_SITE_INCLUDE_INDEX];
+				int iIncl = (int) testRateDef[FIELD_TESTING_RATE_BY_RISK_CATEGORIES_INF_INCLUDE_INDEX];
+				if ((1 << getPersonGrp(pid) & gIncl) != 0 
+						&& (sIncl & siteIncl) != 0 && (iIncl & infIncl) != 0) {
+					if (testRateDef[FIELD_TESTING_RATE_COVERAGE] < 0) {
+						retestRaDefMatch = testRateDef;
 					}
 				}
-
+			}		
+			// Retesting
+			int numRetest = (int) -retestRaDefMatch[FIELD_TESTING_RATE_COVERAGE];
+			int last_test_time = currentTime;
+			while (numRetest > 0) {			
+				int retest_pt = getDelayPt(retestRaDefMatch);
+				if ((retest_pt + 1) < retestRaDefMatch.length) {
+					int delay = (int) retestRaDefMatch[retest_pt];
+					delay += RNG.nextInt((int) retestRaDefMatch[retest_pt + 1] - delay);
+					last_test_time += delay;
+					ArrayList<int[]> sch_test = schedule_testing.get(last_test_time);
+					if (sch_test == null) {
+						sch_test = new ArrayList<>();
+						schedule_testing.put(last_test_time, sch_test);
+					}
+					int[] test_pair = new int[] { pid, infIncl, siteIncl };
+					int pt_t = Collections.binarySearch(sch_test, test_pair, new Comparator<int[]>() {
+						@Override
+						public int compare(int[] o1, int[] o2) {
+							int res = 0;
+							int pt = 0;
+							while (res == 0 && pt < o1.length) {
+								res = Integer.compare(o1[pt], o2[pt]);
+								pt++;
+							}
+							return res;
+						}
+					});
+					if (pt_t < 0) {
+						sch_test.add(~pt_t, test_pair);
+					} else {
+						int[] org_pair = sch_test.get(pt_t);
+						org_pair[1] |= infIncl;
+					}							
+				}else {
+					// No more retest as the person has not return
+					numRetest = -1;
+				}
+				numRetest--;
 			}
-
 		}
+	}
+
+	private int getDelayPt(double[] testRateDef) {
+
+		// For annual testing
+		// Annual_Coverage, -num_delay_option, Prob_Option_0, Prob_Option_1,
+		// ... Prob_Treatment_Delay_Range_0, Prob_Treatment_Delay_Range_1 ...
+		// Delay_Range...,
+		// For retest
+		// -NUM_RETEST, -num_retest_option,
+		// Prob_Option_0, Prob_Option_1, ... Prob_Retest_Range_0... Retest_Range...,
+
+		int numDelayOpt = (int) -testRateDef[FIELD_TESTING_TREATMENT_DELAY_START];
+		int delayOpt_length = (int) (testRateDef.length - FIELD_TESTING_TREATMENT_DELAY_START - numDelayOpt-1)
+				/ (numDelayOpt + 1);
+
+		double pDelayOpt = RNG.nextDouble();
+		int option_pt = Arrays.binarySearch(testRateDef, FIELD_TESTING_TREATMENT_DELAY_START + 1,
+				FIELD_TESTING_TREATMENT_DELAY_START + numDelayOpt, pDelayOpt);
+
+		if (option_pt < 0) {
+			option_pt = ~option_pt;
+		}
+
+		option_pt -= FIELD_TESTING_TREATMENT_DELAY_START + 1;
+
+		int opt_start = FIELD_TESTING_TREATMENT_DELAY_START + 1 + numDelayOpt + option_pt * delayOpt_length;
+		int opt_end = opt_start + delayOpt_length-1;
+
+		pDelayOpt = RNG.nextDouble();
+
+		int delay_pt = Arrays.binarySearch(testRateDef, opt_start, opt_end, pDelayOpt);
+
+		if (delay_pt < 0) {
+			delay_pt = ~delay_pt;
+		}
+
+		delay_pt += (numDelayOpt - option_pt) * delayOpt_length;
+		return delay_pt;
 	}
 
 	@Override
