@@ -27,6 +27,8 @@ public class Util_Analyse_RMP {
 			lines_all_inf.add(new ArrayList<>());
 		}
 		
+		
+		
 		for (File resultSetDir : scenario_dirs_incl) {
 			File[] singleResultSets = resultSetDir.listFiles(new FileFilter() {
 				@Override
@@ -36,13 +38,37 @@ public class Util_Analyse_RMP {
 			});
 
 			Arrays.sort(singleResultSets, cmp_file_suffix);
+			
+			Pattern pattern_num_inf_src = Pattern.compile("Infectious_Prevalence_Person_(-?\\d+).csv.7z");
+			
+			boolean completedSet = true;
+			for (File singleResultSet : singleResultSets) {
+				File[] zips;				
+				zips = singleResultSet.listFiles(new FileFilter() {
+					@Override
+					public boolean accept(File pathname) {
+						return pattern_num_inf_src.matcher(pathname.getName()).matches();
+					}
+				});
+
+				if (zips.length != 1) {
+					System.err.printf("Error. Number of zip in %s != 1\n", singleResultSet.getName());
+					//System.out.printf("qsub %s.pbs\n", singleResultSet.getName());
+					completedSet = false;
+				}
+			}
+			
+			if(!completedSet) {
+				System.exit(-1);
+			}
+			
 			for (File singleResultSet : singleResultSets) {
 
 				// System.out.printf("Current Result Set: %s\n",
 				// singleResultSet.getAbsolutePath());
 
 				File[] zips;
-				Pattern pattern_num_inf_src = Pattern.compile("Infectious_Prevalence_Person_(-?\\d+).csv.7z");
+				
 
 				zips = singleResultSet.listFiles(new FileFilter() {
 					@Override
