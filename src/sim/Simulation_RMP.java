@@ -3,7 +3,7 @@ package sim;
 import java.io.IOException;
 import java.util.Properties;
 
-public class Simulation_RMP_POC extends Simulation_ClusterModelTransmission {
+public class Simulation_RMP extends Simulation_ClusterModelTransmission {
 	
 	public static final String PROP_BASEDIR = "PROP_BASEDIR";
 	public static final String PROP_LOC_MAP = "PROP_LOC_MAP";
@@ -15,13 +15,13 @@ public class Simulation_RMP_POC extends Simulation_ClusterModelTransmission {
 	public static void main(String[] args) throws IOException, InterruptedException {
 		final String USAGE_INFO = String.format(
 				"Usage: java %s PROP_FILE_DIRECTORY " + "<-export_skip_backup> <-printProgress> <-seedMap=SEED_MAP>\n", 
-		Simulation_RMP_POC.class.getName());		
+		Simulation_RMP.class.getName());		
 		
 		if (args.length < 1) {
 			System.out.println(USAGE_INFO);
 			System.exit(0);
 		}else {
-			Simulation_ClusterModelTransmission.launch(args, new Simulation_RMP_POC());
+			Simulation_ClusterModelTransmission.launch(args, new Simulation_RMP());
 		}
 															
 				

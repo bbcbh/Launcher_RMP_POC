@@ -99,9 +99,9 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 
 	public Runnable_MetaPopulation_Transmission_RMP_MultiInfection(long cMap_seed, long sim_seed, Properties prop) {
 		super(cMap_seed, sim_seed, null, prop, NUM_INF, NUM_SITE, NUM_ACT);		
-		this.setBaseDir((File) prop.get(Simulation_RMP_POC.PROP_BASEDIR));
+		this.setBaseDir((File) prop.get(Simulation_RMP.PROP_BASEDIR));
 		this.setBaseProp(prop);
-		this.dir_demographic = new File(baseProp.getProperty(Simulation_RMP_POC.PROP_CONTACT_MAP_LOC));
+		this.dir_demographic = new File(baseProp.getProperty(Simulation_RMP.PROP_CONTACT_MAP_LOC));
 
 		Pattern pattern_movement_csv = Pattern.compile(Runnable_Demographic_Generation.FILENAME_FORMAT_MOVEMENT
 				.replaceAll("%d", Long.toString(cMap_seed)).replaceAll("%s", "(\\\\d+_\\\\d+)"));
