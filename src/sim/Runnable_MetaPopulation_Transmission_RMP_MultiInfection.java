@@ -397,7 +397,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 							}
 						}
 						if (applyTreatment) {
-							int treatment_time;
+//							int treatment_time;
 							int delay_pt = getDelayPt(testRateDefMatch);
 
 							if ((delay_pt + 1) < testRateDefMatch.length) {
@@ -407,7 +407,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 								if (delay <= 1) {
 									cumul_treatment_by_person[infId][getPersonGrp(pid)]++;
 									applyTreatment(currentTime, infId, pid, inf_stage);
-									treatment_time = currentTime;
+//									treatment_time = currentTime;
 								} else {
 									ArrayList<Object[]> sch_treat = schedule_treatment.get(currentTime + delay);
 									if (sch_treat == null) {
@@ -417,10 +417,10 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 									}
 									sch_treat.add(new Object[] { new int[] { infId, pid }, cumul_treatment_by_person });
 
-									treatment_time = currentTime + delay;
+//									treatment_time = currentTime + delay;
 								}
-							} else {
-								treatment_time = -1; // Miss out on treatment
+//							} else {
+//								treatment_time = -1; // Miss out on treatment
 							}
 //							tested_positive |= treatment_time != -1;
 						} // End of if (applyTreatment) {
