@@ -14,21 +14,25 @@ import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import sim.Abstract_Runnable_ClusterModel;
 import sim.Simulation_ClusterModelTransmission;
 
 public class Util_Analyse_RMP {
 
-	public static void extract_num_infection_to_csv(File scenario_dirs_incl, int[][] colIndex) throws IOException, FileNotFoundException {
-		extract_num_infection_to_csv(new File[] {scenario_dirs_incl}, scenario_dirs_incl, colIndex);
+	public static void extract_num_infection_to_csv(File scenario_dirs_incl, int[][] colIndex)
+			throws IOException, FileNotFoundException {
+		extract_num_infection_to_csv(new File[] { scenario_dirs_incl }, scenario_dirs_incl, colIndex);
 	}
-	public static void extract_num_infection_to_csv(File[] scenario_dirs_incl, File output_dir,int[][] colIndex) throws IOException, FileNotFoundException {
+
+	public static void extract_num_infection_to_csv(File[] scenario_dirs_incl, File output_dir, int[][] colIndex)
+			throws IOException, FileNotFoundException {
 		Comparator<File> cmp_file_suffix = generate_file_comparator_by_suffix();
-		
+
 		ArrayList<ArrayList<StringBuilder>> lines_all_inf = new ArrayList<>();
 		for (int p = 0; p < colIndex.length; p++) {
 			lines_all_inf.add(new ArrayList<>());
 		}
-		
+
 		for (File resultSetDir : scenario_dirs_incl) {
 			File[] singleResultSets = resultSetDir.listFiles(new FileFilter() {
 				@Override
@@ -38,12 +42,12 @@ public class Util_Analyse_RMP {
 			});
 
 			Arrays.sort(singleResultSets, cmp_file_suffix);
-			
+
 			Pattern pattern_num_inf_src = Pattern.compile("Infectious_Prevalence_Person_(-?\\d+).csv.7z");
-			
+
 			boolean completedSet = true;
 			for (File singleResultSet : singleResultSets) {
-				File[] zips;				
+				File[] zips;
 				zips = singleResultSet.listFiles(new FileFilter() {
 					@Override
 					public boolean accept(File pathname) {
@@ -53,22 +57,21 @@ public class Util_Analyse_RMP {
 
 				if (zips.length != 1) {
 					System.err.printf("Error. Number of zip in %s != 1\n", singleResultSet.getName());
-					//System.out.printf("qsub %s.pbs\n", singleResultSet.getName());
+					// System.out.printf("qsub %s.pbs\n", singleResultSet.getName());
 					completedSet = false;
 				}
 			}
-			
-			if(!completedSet) {
+
+			if (!completedSet) {
 				System.exit(-1);
 			}
-			
+
 			for (File singleResultSet : singleResultSets) {
 
 				// System.out.printf("Current Result Set: %s\n",
 				// singleResultSet.getAbsolutePath());
 
 				File[] zips;
-				
 
 				zips = singleResultSet.listFiles(new FileFilter() {
 					@Override
@@ -152,8 +155,8 @@ public class Util_Analyse_RMP {
 
 			PrintWriter[] pWriters_num_infect = new PrintWriter[colIndex.length];
 			for (int p = 0; p < colIndex.length; p++) {
-				pWriters_num_infect[p] = new PrintWriter(new File(output_dir,
-						String.format("Inf_%d_num_of_infected.csv", p)));
+				pWriters_num_infect[p] = new PrintWriter(
+						new File(output_dir, String.format("Inf_%d_num_of_infected.csv", p)));
 				for (StringBuilder lines : lines_all_inf.get(p)) {
 					pWriters_num_infect[p].println(lines.toString());
 				}
@@ -178,10 +181,8 @@ public class Util_Analyse_RMP {
 		return cmp_file_suffix;
 	}
 
-	public static void extract_infection_history_to_csv(File scenario_dir, 
-			HashMap<Integer, String[]> indiv_map_by_cmap,
-			int switchTime, int[] inf_modelled)
-			throws IOException, FileNotFoundException {
+	public static void extract_infection_history_to_csv(File scenario_dir, HashMap<Integer, String[]> indiv_map_by_cmap,
+			int switchTime, int[] inf_modelled) throws IOException, FileNotFoundException {
 
 		Pattern pattern_suffix = Pattern.compile(".*_(\\d+)");
 		Comparator<File> cmp_file_suffix = new Comparator<File>() {
@@ -282,19 +283,22 @@ public class Util_Analyse_RMP {
 		}
 		return map_indiv_map;
 	}
-	public static void extracted_PID_from_InfectHist(File[] sce_dir, File output_dir, 
-			Map<Integer, double[]> PID_prob_map, int[] sample_time) throws IOException, FileNotFoundException {
+
+	public static void extracted_PID_from_InfectHist(File[] sce_dir, File output_dir,
+			HashMap<Long, HashMap<Integer, String[]>> demographic, int grp_incl, 
+			Map<Integer, double[]> PID_prob_map,
+			int[] sample_time) throws IOException, FileNotFoundException {
 		Pattern pattern_inf_hist_zip = Pattern.compile(
 				Simulation_ClusterModelTransmission.FILENAME_INFECTION_HISTORY_ZIP.replaceAll("%d", "(-?\\\\d+)"));
 		Pattern pattern_inf_preval_header = Pattern.compile(String.format("\\[(.+),(\\d+)\\]%s",
 				Simulation_ClusterModelTransmission.FILENAME_INFECTION_HISTORY.replaceAll("%d", "(-?\\\\d+)")));
-	
+
 		HashMap<Integer, HashMap<String, HashMap<Integer, ArrayList<Double>>>> area_under_curve_PID_by_inf = new HashMap<>();
-	
+
 		for (int inf : PID_prob_map.keySet()) {
 			area_under_curve_PID_by_inf.put(inf, new HashMap<>());
 		}
-	
+
 		for (File resultSetDir : sce_dir) {
 			File[] singleResultSets = resultSetDir.listFiles(new FileFilter() {
 				@Override
@@ -302,103 +306,119 @@ public class Util_Analyse_RMP {
 					return pathname.isDirectory() && !"PBS".equals(pathname.getName());
 				}
 			});
-	
+
 			for (File singleResultSet : singleResultSets) {
 				long tic = System.currentTimeMillis();
-				
+
 				File[] inf_hist_zips = singleResultSet.listFiles(new FileFilter() {
 					@Override
 					public boolean accept(File pathname) {
 						return pattern_inf_hist_zip.matcher(pathname.getName()).matches();
 					}
 				});
-	
+
 				if (inf_hist_zips.length != 1) {
 					System.err.printf("Error. Number of zip in %s != 1\n", singleResultSet.getAbsolutePath());
 				} else {
 					// Should have one map only
 					HashMap<String, ArrayList<String[]>> linesMap = util.Util_7Z_CSV_Entry_Extract_Callable
 							.extractedLinesFrom7Zip(inf_hist_zips[0]);
-	
+
+					Matcher m_zip = pattern_inf_hist_zip.matcher(inf_hist_zips[0].getName());
+					m_zip.matches();
+
+					long cmap_seed = Long.parseLong(m_zip.group(1));
+
+					HashMap<Integer, String[]> lookup_demograhic = demographic.get(cmap_seed);
+
 					for (Entry<String, ArrayList<String[]>> ent : linesMap.entrySet()) {
-						Matcher m = pattern_inf_preval_header.matcher(ent.getKey());								
+						Matcher m = pattern_inf_preval_header.matcher(ent.getKey());
 						String key;
 						if (m.find()) {
-							key = String.format("%s:%s(%s_%s_%s)", resultSetDir.getName(),
-									singleResultSet.getName(), m.group(2), m.group(3), m.group(4));
+							key = String.format("%s:%s(%s_%s_%s)", resultSetDir.getName(), singleResultSet.getName(),
+									m.group(2), m.group(3), m.group(4));
 						} else {
 							key = String.format("%s:%s_(%s)", resultSetDir.getName(), singleResultSet.getName(),
 									ent.getKey());
 						}
-	
+
 						for (String[] line : ent.getValue()) {
-							Integer inf_id = Integer.parseInt(line[1]);
-							if (PID_prob_map.containsKey(inf_id)) {
-								double[] pid_setting = PID_prob_map.get(inf_id);
-								HashMap<String, HashMap<Integer, ArrayList<Double>>> area_under_curve_PID = area_under_curve_PID_by_inf
-										.get(inf_id);
-	
-								int past_inc_count = 0;
-								for (int inf_hist_index = 2; (inf_hist_index+2) < line.length; inf_hist_index += 3) {
-									int inf_start = Integer.parseInt(line[inf_hist_index]);
-									int inf_end = Integer.parseInt(line[inf_hist_index + 1]);
-	
-									int pt_t = Arrays.binarySearch(sample_time, inf_end);
-									if (pt_t < 0) {
-										pt_t = ~pt_t;
-									}
-	
-									if (pt_t >= 1 && pt_t < sample_time.length) {												
-	
-										HashMap<Integer, ArrayList<Double>> area_under_curve_per_infection = area_under_curve_PID
-												.get(key);
-	
-										if (area_under_curve_per_infection == null) {
-											area_under_curve_per_infection = new HashMap<>();
-											area_under_curve_PID.put(key, area_under_curve_per_infection);
-										}																								
-	
-										int inf_dur_pid = Math.min((int) pid_setting[0], inf_end - inf_start);
-	
-										int numSetting = (pid_setting.length - 1) / 2;
-										int pt_p = Arrays.binarySearch(pid_setting, 1, numSetting,
-												past_inc_count);
-										if (pt_p < 0) {
-											pt_p = ~pt_p;
+							// Include female only
+							int person_id = Integer.parseInt(line[0]);
+							int grp = Integer.parseInt(
+									lookup_demograhic.get(person_id)[Abstract_Runnable_ClusterModel.POP_INDEX_GRP+1]); // Offset by PID
+
+							if ((grp_incl & (1 << grp)) !=  0) {
+
+								Integer inf_id = Integer.parseInt(line[1]);
+
+								if (PID_prob_map.containsKey(inf_id)) {
+									double[] pid_setting = PID_prob_map.get(inf_id);
+									HashMap<String, HashMap<Integer, ArrayList<Double>>> area_under_curve_PID = area_under_curve_PID_by_inf
+											.get(inf_id);
+
+									int past_inc_count = 0;
+									for (int inf_hist_index = 2; (inf_hist_index
+											+ 2) < line.length; inf_hist_index += 3) {
+										int inf_start = Integer.parseInt(line[inf_hist_index]);
+										int inf_end = Integer.parseInt(line[inf_hist_index + 1]);
+
+										int pt_t = Arrays.binarySearch(sample_time, inf_end);
+										if (pt_t < 0) {
+											pt_t = ~pt_t;
 										}
-										double prob_pid_per_day = pid_setting[numSetting + pt_p];
-	
-										ArrayList<Double> sample_arr = area_under_curve_per_infection.get(pt_t);
-										if (sample_arr == null) {
-											sample_arr = new ArrayList<>();
-											area_under_curve_per_infection.put(pt_t, sample_arr);
+
+										if (pt_t >= 1 && pt_t < sample_time.length) {
+
+											HashMap<Integer, ArrayList<Double>> area_under_curve_per_infection = area_under_curve_PID
+													.get(key);
+
+											if (area_under_curve_per_infection == null) {
+												area_under_curve_per_infection = new HashMap<>();
+												area_under_curve_PID.put(key, area_under_curve_per_infection);
+											}
+
+											int inf_dur_pid = Math.min((int) pid_setting[0], inf_end - inf_start);
+
+											int numSetting = (pid_setting.length - 1) / 2;
+											int pt_p = Arrays.binarySearch(pid_setting, 1, numSetting, past_inc_count);
+											if (pt_p < 0) {
+												pt_p = ~pt_p;
+											}
+											double prob_pid_per_day = pid_setting[numSetting + pt_p];
+
+											ArrayList<Double> sample_arr = area_under_curve_per_infection.get(pt_t);
+											if (sample_arr == null) {
+												sample_arr = new ArrayList<>();
+												area_under_curve_per_infection.put(pt_t, sample_arr);
+											}
+
+											double PID_p = 1 - Math.pow(1 - prob_pid_per_day, inf_dur_pid);
+
+											sample_arr.add(PID_p);
 										}
-										
-										double PID_p = 1 - Math.pow(1 - prob_pid_per_day, inf_dur_pid);
-	
-										sample_arr.add(PID_p);
+										past_inc_count++;
+
 									}
-									past_inc_count++;
-	
-								}
-							} // End of if (pid_prob_map.containsKey(inf_id)) {
+								} // End of if (pid_prob_map.containsKey(inf_id)) {
+							}
 						} // End of for (String[] line : ent.getValue()) {
 					} // for (Entry<String, ArrayList<String[]>> ent : linesMap.entrySet()) {
 				} // End of if (inf_hist_zips.length != 1) { } else {
-				
-				System.out.printf("Looking at infection history at %s. Time req. = %.3fs\n", 
-						singleResultSet.getName(), (System.currentTimeMillis() - tic)/1000.0);
+
+				System.out.printf("Looking at infection history at %s. Time req. = %.3fs\n", singleResultSet.getName(),
+						(System.currentTimeMillis() - tic) / 1000.0);
 			} // End of for (File singleResultSet : singleResultSets) {
 		} // End of for (File resultSetDir : scenario_dirs_incl) {
-	
+
 		// Print Result from area_under_curve_PID_by_inf
-		for (Entry<Integer, HashMap<String, HashMap<Integer,ArrayList<Double>>>> area_under_curve : area_under_curve_PID_by_inf
+		for (Entry<Integer, HashMap<String, HashMap<Integer, ArrayList<Double>>>> area_under_curve : area_under_curve_PID_by_inf
 				.entrySet()) {
-	
+
 			if (area_under_curve.getValue().size() > 0) {
 				PrintWriter pWri_PID_stat = new PrintWriter(
 						new File(output_dir, String.format("Inf_%d_PID_Stat.csv", area_under_curve.getKey())));
-	
+
 				StringBuilder header = new StringBuilder();
 				header.append("SIM_ID");
 				for (int i = 0; i < sample_time.length - 1; i++) {
@@ -409,13 +429,12 @@ public class Util_Analyse_RMP {
 					header.append("Prob_PID_" + time_range);
 				}
 				pWri_PID_stat.println(header.toString());
-	
+
 				String[] sim_keys = area_under_curve.getValue().keySet().toArray(new String[0]);
 				Arrays.sort(sim_keys, new Comparator<String>() {
 					@Override
 					public int compare(String o1, String o2) {
-						Pattern key_pattern = Pattern
-								.compile("(.*):(.*)\\((-?\\\\d+)_(-?\\\\d+)_(-?\\\\d+)\\)");
+						Pattern key_pattern = Pattern.compile("(.*):(.*)\\((-?\\\\d+)_(-?\\\\d+)_(-?\\\\d+)\\)");
 						Matcher m1 = key_pattern.matcher(o1);
 						Matcher m2 = key_pattern.matcher(o2);
 						if (m1.find() && m2.find()) {
@@ -426,9 +445,9 @@ public class Util_Analyse_RMP {
 							for (int s = 3; s < Math.min(m1.groupCount(), m2.groupCount()) && res == 0; s++) {
 								res = Long.compare(Long.parseLong(m1.group(s)), Long.parseLong(m2.group(s)));
 							}
-	
+
 							return res;
-	
+
 						} else {
 							return o1.compareTo(o2);
 						}
@@ -438,23 +457,23 @@ public class Util_Analyse_RMP {
 					HashMap<Integer, ArrayList<Double>> PID_stat = area_under_curve.getValue().get(sim_key);
 					Integer[] time_range_index = PID_stat.keySet().toArray(new Integer[0]);
 					Arrays.sort(time_range_index);
-					
+
 					pWri_PID_stat.printf("%s", sim_key);
-					
-					for(Integer tR_i : time_range_index) {																
+
+					for (Integer tR_i : time_range_index) {
 						double pSum = 0;
 						for (Double v : PID_stat.get(tR_i)) {
 							pSum += v;
-						}								
+						}
 						pWri_PID_stat.printf(",%d,%s", PID_stat.get(tR_i).size(), pSum);
-					}	
-					
+					}
+
 					pWri_PID_stat.println();
-	
+
 				}
-	
+
 				pWri_PID_stat.close();
-	
+
 			}
 		}
 	}
