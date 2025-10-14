@@ -64,9 +64,8 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 
 	// Retesting
 	protected static final int FIELD_TESTING_RETEST_POS_INF_INCL = FIELD_TESTING_RATE_COVERAGE + 1;
-	protected static final int FIELD_TESTING_RETEST_PROB = FIELD_TESTING_RETEST_POS_INF_INCL + 1;
-	protected static final int FIELD_TESTING_RETEST_RANGE_START = FIELD_TESTING_RETEST_PROB + 1;
-	protected static final int FIELD_TESTING_RETEST_RANGE_END = FIELD_TESTING_RETEST_RANGE_START + 1;
+	protected static final int FIELD_TESTING_RETEST_PROB_START = FIELD_TESTING_RETEST_POS_INF_INCL + 1;
+
 
 	// Key = time
 	// V= new Object[] {
@@ -492,21 +491,31 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 			if ((1 << getPersonGrp(pid) & gIncl) != 0) {
 				if (testRateDef[FIELD_TESTING_RATE_COVERAGE] < 0) {
 					boolean match = false;
-					int stage_incl = (int) testRateDef[FIELD_TESTING_RETEST_POS_INF_INCL];
-					if (stage_incl == AbstractIndividualInterface.INFECT_S) {
+					int inf_incl = (int) testRateDef[FIELD_TESTING_RETEST_POS_INF_INCL];
+					if (inf_incl == AbstractIndividualInterface.INFECT_S) {
 						match = tested_positive.isEmpty();
 					} else {
 						for (int infId : tested_positive) {
-							match |= (stage_incl & 1 << infId) != 0;
+							match |= (inf_incl & 1 << infId) != 0;
 						}
 					}
 					if (match) {
 						double[] retestDefMatch = testRateDef;
-						double pRetest = RNG.nextDouble();
-						if (pRetest < retestDefMatch[FIELD_TESTING_RETEST_PROB]) {
-							int retest_time = currentTime + (int) retestDefMatch[FIELD_TESTING_RETEST_RANGE_START]
-									+ RNG.nextInt((int) retestDefMatch[FIELD_TESTING_RETEST_RANGE_END]
-											- (int) retestDefMatch[FIELD_TESTING_RETEST_RANGE_START]);
+						double pRetest = RNG.nextDouble(); // Retest Range
+						int retest_range_offset =  (retestDefMatch.length - FIELD_TESTING_RETEST_PROB_START)/2;
+						int pt_pRestest = Arrays.binarySearch(
+								retestDefMatch, FIELD_TESTING_RETEST_PROB_START, 
+								FIELD_TESTING_RETEST_PROB_START+retest_range_offset-1, pRetest);
+						
+						if(pt_pRestest <0) {
+							pt_pRestest = ~pt_pRestest;
+						}						
+						pt_pRestest = pt_pRestest + retest_range_offset;												
+						
+						if (pt_pRestest+1 < retestDefMatch.length) {
+							int retest_time = currentTime + (int) retestDefMatch[pt_pRestest]
+									+ RNG.nextInt((int) retestDefMatch[pt_pRestest+1]
+											- (int) retestDefMatch[pt_pRestest]);
 
 							ArrayList<int[]> sch_test = schedule_testing.get(retest_time);
 							if (sch_test == null) {
