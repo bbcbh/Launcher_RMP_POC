@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.regex.Matcher;
@@ -284,19 +285,37 @@ public class Util_Analyse_RMP {
 		return map_indiv_map;
 	}
 
-	public static void extracted_PID_from_InfectHist(File[] sce_dir, File output_dir,
-			HashMap<Long, HashMap<Integer, String[]>> demographic, int grp_incl, 
-			Map<Integer, double[]> PID_prob_map,
+	public final static String SETTING_GRP_INCL = "SETTING_GRP_INCL"; // Integer
+	public final static String SETTING_BIRTH_RATE = "SETTING_BIRTH_RATE"; // double[]
+	public final static String SETTING_BIRTH_BASED_SUBOUTCOMES = "SETTING_BIRTH_BASED_SUBOUTCOMES"; // String[]
+	public final static String SETTING_BIRTH_BASED_SUBOUTCOMES_SETTING = "SETTING_BIRTH_BASED_SUBOUTCOMES_SETTING"; // double[][]
+
+	// morbidity_setting_all = Number[] {grp_incl}
+	public static void extracted_morbidity_from_InfectHist(File[] sce_dir, File output_dir,
+			HashMap<Long, HashMap<Integer, String[]>> demographic,
+			Map<String, Map<Integer, double[]>> morbidity_prob_map_all,
+			Map<String, Map<String, Object>> morbidity_setting_all,
+
 			int[] sample_time) throws IOException, FileNotFoundException {
 		Pattern pattern_inf_hist_zip = Pattern.compile(
 				Simulation_ClusterModelTransmission.FILENAME_INFECTION_HISTORY_ZIP.replaceAll("%d", "(-?\\\\d+)"));
 		Pattern pattern_inf_preval_header = Pattern.compile(String.format("\\[(.+),(\\d+)\\]%s",
 				Simulation_ClusterModelTransmission.FILENAME_INFECTION_HISTORY.replaceAll("%d", "(-?\\\\d+)")));
 
-		HashMap<Integer, HashMap<String, HashMap<Integer, ArrayList<Double>>>> area_under_curve_PID_by_inf = new HashMap<>();
+		final int GRP_INDEX_INF_HISTORY_HEADER_ROW_INDEX = 2;
+		final int GRP_INDEX_INF_HISTORY_HEADER_CMAP_SEED = 3;
+		final int GRP_INDEX_INF_HISTORY_HEADER_SIM_SEED = 4;
 
-		for (int inf : PID_prob_map.keySet()) {
-			area_under_curve_PID_by_inf.put(inf, new HashMap<>());
+		HashMap<String, HashMap<Integer, HashMap<String, HashMap<Integer, ArrayList<Double>>>>> area_under_curve_all = new HashMap<>();
+
+		Map<Integer, double[]> morbidity_prob_map;
+		for (String morbid_key : morbidity_prob_map_all.keySet()) {
+			morbidity_prob_map = morbidity_prob_map_all.get(morbid_key);
+			HashMap<Integer, HashMap<String, HashMap<Integer, ArrayList<Double>>>> morbidity_area_under_curve_by_inf = new HashMap<>();
+			for (int inf : morbidity_prob_map.keySet()) {
+				morbidity_area_under_curve_by_inf.put(inf, new HashMap<>());
+			}
+			area_under_curve_all.put(morbid_key, morbidity_area_under_curve_by_inf);
 		}
 
 		for (File resultSetDir : sce_dir) {
@@ -336,73 +355,222 @@ public class Util_Analyse_RMP {
 						String key;
 						if (m.find()) {
 							key = String.format("%s:%s(%s_%s_%s)", resultSetDir.getName(), singleResultSet.getName(),
-									m.group(2), m.group(3), m.group(4));
+									m.group(GRP_INDEX_INF_HISTORY_HEADER_ROW_INDEX),
+									m.group(GRP_INDEX_INF_HISTORY_HEADER_CMAP_SEED),
+									m.group(GRP_INDEX_INF_HISTORY_HEADER_SIM_SEED));
 						} else {
 							key = String.format("%s:%s_(%s)", resultSetDir.getName(), singleResultSet.getName(),
 									ent.getKey());
 						}
 
 						for (String[] line : ent.getValue()) {
-							// Include female only
 							int person_id = Integer.parseInt(line[0]);
-							int grp = Integer.parseInt(
-									lookup_demograhic.get(person_id)[Abstract_Runnable_ClusterModel.POP_INDEX_GRP+1]); // Offset by PID
+							String[] indiv_stat = lookup_demograhic.get(person_id);
+							int grp = Integer.parseInt(indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_GRP + 1]);
 
-							if ((grp_incl & (1 << grp)) !=  0) {
+							int enter_age = Integer
+									.parseInt(indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_ENTER_POP_AGE + 1]);
+							int enter_at = Integer
+									.parseInt(indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_ENTER_POP_AT + 1]);
+							int exit_at = Integer
+									.parseInt(indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_EXIT_POP_AT + 1]);
 
-								Integer inf_id = Integer.parseInt(line[1]);
+							String[] morbid_key_arr = morbidity_prob_map_all.keySet().toArray(new String[0]);
 
-								if (PID_prob_map.containsKey(inf_id)) {
-									double[] pid_setting = PID_prob_map.get(inf_id);
-									HashMap<String, HashMap<Integer, ArrayList<Double>>> area_under_curve_PID = area_under_curve_PID_by_inf
-											.get(inf_id);
+							for (String morbid_key : morbid_key_arr) {
+								int grp_incl = ((Number) morbidity_setting_all.get(morbid_key).get(SETTING_GRP_INCL))
+										.intValue();
+								morbidity_prob_map = morbidity_prob_map_all.get(morbid_key);
 
-									int past_inc_count = 0;
-									for (int inf_hist_index = 2; (inf_hist_index
-											+ 2) < line.length; inf_hist_index += 3) {
-										int inf_start = Integer.parseInt(line[inf_hist_index]);
-										int inf_end = Integer.parseInt(line[inf_hist_index + 1]);
+								if ((grp_incl & (1 << grp)) != 0) {
+									Integer inf_id = Integer.parseInt(line[1]);
+									if (morbidity_prob_map.containsKey(inf_id)) {
+										double[] morbidity_setting = morbidity_prob_map.get(inf_id);
+										HashMap<String, HashMap<Integer, ArrayList<Double>>> area_under_curve_by_morbidity = area_under_curve_all
+												.get(morbid_key).get(inf_id);
 
-										int pt_t = Arrays.binarySearch(sample_time, inf_end);
-										if (pt_t < 0) {
-											pt_t = ~pt_t;
+										int first_inf_time = -1;
+
+										int past_inc_count = 0;
+										for (int inf_hist_index = 2; (inf_hist_index
+												+ 2) < line.length; inf_hist_index += 3) {
+											int inf_start = Integer.parseInt(line[inf_hist_index]);
+											int inf_end = Integer.parseInt(line[inf_hist_index + 1]);
+
+											if (first_inf_time == -1) {
+												first_inf_time = inf_start;
+											}
+
+											int pt_sample_time = Arrays.binarySearch(sample_time, inf_end);
+											if (pt_sample_time < 0) {
+												pt_sample_time = ~pt_sample_time;
+											}
+
+											if (pt_sample_time >= 1 && pt_sample_time < sample_time.length) {
+
+												HashMap<Integer, ArrayList<Double>> area_under_curve_per_infection = area_under_curve_by_morbidity
+														.get(key);
+
+												if (area_under_curve_per_infection == null) {
+													area_under_curve_per_infection = new HashMap<>();
+													area_under_curve_by_morbidity.put(key,
+															area_under_curve_per_infection);
+												}
+
+												int morbidity_inf_dur = inf_end - inf_start;
+
+												// Trim down duration (e.g. as in for PID)
+												if (morbidity_setting[0] > 0) {
+													morbidity_inf_dur = Math.min((int) morbidity_setting[0],
+															morbidity_inf_dur);
+												}
+
+												int numSetting = (morbidity_setting.length - 1) / 2;
+												int pt_p = Arrays.binarySearch(morbidity_setting, 1, numSetting,
+														past_inc_count);
+												if (pt_p < 0) {
+													pt_p = ~pt_p;
+												}
+												double prob_morbidity_per_day = morbidity_setting[numSetting + pt_p];
+
+												ArrayList<Double> area_under_curve_by_sample_time_arr = area_under_curve_per_infection
+														.get(pt_sample_time);
+												if (area_under_curve_by_sample_time_arr == null) {
+													area_under_curve_by_sample_time_arr = new ArrayList<>();
+													area_under_curve_per_infection.put(pt_sample_time,
+															area_under_curve_by_sample_time_arr);
+												}
+												double p_morbidity = 1
+														- Math.pow(1 - prob_morbidity_per_day, morbidity_inf_dur);
+
+												area_under_curve_by_sample_time_arr.add(p_morbidity);
+
+											}
+											past_inc_count++;
+										} // End of for (int inf_hist_index = 2; .... (Check infection history
+
+										// TOOD: Birth rate dependent morbidity
+										String[] birth_rate_suboutcome_name = (String[]) morbidity_setting_all
+												.get(morbid_key).get(SETTING_BIRTH_BASED_SUBOUTCOMES);
+										if (birth_rate_suboutcome_name != null) {
+
+											double[] birth_rate_by_age = (double[]) morbidity_setting_all
+													.get(SETTING_BIRTH_RATE).get(SETTING_BIRTH_RATE);
+
+											for (int sub_outcome_index = 0; sub_outcome_index < birth_rate_suboutcome_name.length; sub_outcome_index++) {
+
+												String sub_outcome_name = birth_rate_suboutcome_name[sub_outcome_index];
+
+												if (area_under_curve_all.get(sub_outcome_name) == null) {
+													area_under_curve_all.put(sub_outcome_name, new HashMap<>());
+												}
+												if (area_under_curve_all.get(sub_outcome_name).get(inf_id) == null) {
+													area_under_curve_all.get(sub_outcome_name).get(inf_id).put(key,
+															new HashMap<>());
+												}
+
+												// Format:
+												// {cat_0,cat_1,cat_2,...prob_cat_0,prob_cat_1,prob_cat_2...}
+												double[] sub_outcome_setting = ((double[][]) morbidity_setting_all
+														.get(morbid_key)
+														.get(SETTING_BIRTH_BASED_SUBOUTCOMES_SETTING))[sub_outcome_index];
+
+												for (int sample_time_end_pt = 1; sample_time_end_pt < sample_time.length; sample_time_end_pt++) {
+
+													int age_sample_time_start = enter_age + -enter_at + Math
+															.max(first_inf_time, sample_time[sample_time_end_pt - 1]);
+													int age_sample_time_end = enter_age + -enter_at
+															+ sample_time[sample_time_end_pt];
+
+													// TODO: Determine birth rate since first infection or last sample
+													// time
+													int birth_pt;
+
+													double birth_rate_sample_time = 0;
+
+													int age_range_start = age_sample_time_start;
+
+													while (age_range_start < age_sample_time_end) {
+
+														birth_pt = Arrays.binarySearch(birth_rate_by_age, 0,
+																birth_rate_by_age.length / 2, age_range_start);
+														if (birth_pt < 0) {
+															birth_pt = ~birth_pt;
+														}
+														int age_range_end = Math.min(age_sample_time_end,
+																(int) birth_rate_by_age[birth_pt + 1])
+																- age_range_start;
+
+														birth_rate_sample_time += 1 - Math
+																.pow(1 - birth_rate_by_age[birth_rate_by_age.length / 2
+																		+ birth_pt], age_range_end);
+
+														age_range_start = (int) birth_rate_by_age[birth_pt + 1];
+													}
+
+													ArrayList<Double> area_under_curve_per_at_sample_time = area_under_curve_all
+															.get(morbid_key).get(inf_id).get(key)
+															.get(sample_time_end_pt);
+
+													Double[] prob_morbidity = area_under_curve_per_at_sample_time
+															.toArray(new Double[0]);
+
+													// Calculate event probability as define in the range
+													if (prob_morbidity.length > 64) {
+														System.err.printf(
+																"Warning. # event = %d > 64. Will use the top 64 instead.\n",
+																prob_morbidity.length);
+														Arrays.sort(prob_morbidity);
+
+														prob_morbidity = Arrays.copyOfRange(prob_morbidity,
+																prob_morbidity.length - 64, prob_morbidity.length);
+
+													}
+													long probTrueIndexMax = (long) Math.pow(2, prob_morbidity.length);
+													long probTrueIndex = 1;
+
+													double[] event_prob = new double[sub_outcome_setting.length / 2];
+
+													while (probTrueIndex < probTrueIndexMax) {
+														double probProduct = 1;
+														double eventCount = 0;
+														for (int eI = 0; eI < prob_morbidity.length; eI++) {
+															if ((1 << eI & probTrueIndex) != 0) {
+																eventCount++;
+																probProduct *= prob_morbidity[eI];
+															} else {
+																probProduct *= (1 - prob_morbidity[eI]);
+															}
+														}
+														int pt = Arrays.binarySearch(sub_outcome_setting, 0,
+																sub_outcome_setting.length / 2, eventCount);
+														if (pt < 0) {
+															pt = ~pt;
+														}
+														event_prob[Math.max(pt, event_prob.length - 1)] += probProduct;
+
+														probTrueIndex++;
+													}
+
+													// Calculate sub outcome
+													double prob_sub_outcome_by_sample_time = 0;
+													for (int i = 0; i < event_prob.length; i++) {
+														prob_sub_outcome_by_sample_time += event_prob[i]
+																* sub_outcome_setting[i + event_prob.length];
+													}
+													prob_sub_outcome_by_sample_time *= birth_rate_sample_time;
+
+												}
+
+											}
+
 										}
 
-										if (pt_t >= 1 && pt_t < sample_time.length) {
-
-											HashMap<Integer, ArrayList<Double>> area_under_curve_per_infection = area_under_curve_PID
-													.get(key);
-
-											if (area_under_curve_per_infection == null) {
-												area_under_curve_per_infection = new HashMap<>();
-												area_under_curve_PID.put(key, area_under_curve_per_infection);
-											}
-
-											int inf_dur_pid = Math.min((int) pid_setting[0], inf_end - inf_start);
-
-											int numSetting = (pid_setting.length - 1) / 2;
-											int pt_p = Arrays.binarySearch(pid_setting, 1, numSetting, past_inc_count);
-											if (pt_p < 0) {
-												pt_p = ~pt_p;
-											}
-											double prob_pid_per_day = pid_setting[numSetting + pt_p];
-
-											ArrayList<Double> sample_arr = area_under_curve_per_infection.get(pt_t);
-											if (sample_arr == null) {
-												sample_arr = new ArrayList<>();
-												area_under_curve_per_infection.put(pt_t, sample_arr);
-											}
-
-											double PID_p = 1 - Math.pow(1 - prob_pid_per_day, inf_dur_pid);
-
-											sample_arr.add(PID_p);
-										}
-										past_inc_count++;
-
-									}
-								} // End of if (pid_prob_map.containsKey(inf_id)) {
-							}
+									} // End of if (pid_prob_map.containsKey(inf_id)) {
+								} // End of if ((grp_incl & (1 << grp)) != 0) {
+							} // End of for(String morbid_key : morbidity_prob_map_all.keySet()) {
 						} // End of for (String[] line : ent.getValue()) {
+
 					} // for (Entry<String, ArrayList<String[]>> ent : linesMap.entrySet()) {
 				} // End of if (inf_hist_zips.length != 1) { } else {
 
@@ -411,69 +579,75 @@ public class Util_Analyse_RMP {
 			} // End of for (File singleResultSet : singleResultSets) {
 		} // End of for (File resultSetDir : scenario_dirs_incl) {
 
-		// Print Result from area_under_curve_PID_by_inf
-		for (Entry<Integer, HashMap<String, HashMap<Integer, ArrayList<Double>>>> area_under_curve : area_under_curve_PID_by_inf
-				.entrySet()) {
+		// Print Result
+		for (String morbid_key : area_under_curve_all.keySet()) {
 
-			if (area_under_curve.getValue().size() > 0) {
-				PrintWriter pWri_PID_stat = new PrintWriter(
-						new File(output_dir, String.format("Inf_%d_PID_Stat.csv", area_under_curve.getKey())));
+			HashMap<Integer, HashMap<String, HashMap<Integer, ArrayList<Double>>>> area_under_curve_morbidity_by_inf = area_under_curve_all
+					.get(morbid_key);
 
-				StringBuilder header = new StringBuilder();
-				header.append("SIM_ID");
-				for (int i = 0; i < sample_time.length - 1; i++) {
-					String time_range = String.format("(%d - %d)", sample_time[i + 1], sample_time[i]);
-					header.append(',');
-					header.append("Incidence_" + time_range);
-					header.append(',');
-					header.append("Prob_PID_" + time_range);
-				}
-				pWri_PID_stat.println(header.toString());
+			for (Entry<Integer, HashMap<String, HashMap<Integer, ArrayList<Double>>>> area_under_curve : area_under_curve_morbidity_by_inf
+					.entrySet()) {
 
-				String[] sim_keys = area_under_curve.getValue().keySet().toArray(new String[0]);
-				Arrays.sort(sim_keys, new Comparator<String>() {
-					@Override
-					public int compare(String o1, String o2) {
-						Pattern key_pattern = Pattern.compile("(.*):(.*)\\((-?\\\\d+)_(-?\\\\d+)_(-?\\\\d+)\\)");
-						Matcher m1 = key_pattern.matcher(o1);
-						Matcher m2 = key_pattern.matcher(o2);
-						if (m1.find() && m2.find()) {
-							int res = m1.group(1).compareTo(m2.group(1));
-							if (res == 0) {
-								res = m1.group(2).compareTo(m2.group(2));
-							}
-							for (int s = 3; s < Math.min(m1.groupCount(), m2.groupCount()) && res == 0; s++) {
-								res = Long.compare(Long.parseLong(m1.group(s)), Long.parseLong(m2.group(s)));
-							}
+				if (area_under_curve.getValue().size() > 0) {
+					PrintWriter pWri_PID_stat = new PrintWriter(
+							new File(output_dir, String.format(morbid_key, area_under_curve.getKey())));
 
-							return res;
-
-						} else {
-							return o1.compareTo(o2);
-						}
+					StringBuilder header = new StringBuilder();
+					header.append("SIM_ID");
+					for (int i = 0; i < sample_time.length - 1; i++) {
+						String time_range = String.format("(%d - %d)", sample_time[i + 1], sample_time[i]);
+						header.append(',');
+						header.append("Incidence_" + time_range);
+						header.append(',');
+						header.append("Prob_Morbidity_" + time_range);
 					}
-				});
-				for (String sim_key : sim_keys) {
-					HashMap<Integer, ArrayList<Double>> PID_stat = area_under_curve.getValue().get(sim_key);
-					Integer[] time_range_index = PID_stat.keySet().toArray(new Integer[0]);
-					Arrays.sort(time_range_index);
+					pWri_PID_stat.println(header.toString());
 
-					pWri_PID_stat.printf("%s", sim_key);
+					String[] sim_keys = area_under_curve.getValue().keySet().toArray(new String[0]);
+					Arrays.sort(sim_keys, new Comparator<String>() {
+						@Override
+						public int compare(String o1, String o2) {
+							Pattern key_pattern = Pattern.compile("(.*):(.*)\\((-?\\\\d+)_(-?\\\\d+)_(-?\\\\d+)\\)");
+							Matcher m1 = key_pattern.matcher(o1);
+							Matcher m2 = key_pattern.matcher(o2);
+							if (m1.find() && m2.find()) {
+								int res = m1.group(1).compareTo(m2.group(1));
+								if (res == 0) {
+									res = m1.group(2).compareTo(m2.group(2));
+								}
+								for (int s = 3; s < Math.min(m1.groupCount(), m2.groupCount()) && res == 0; s++) {
+									res = Long.compare(Long.parseLong(m1.group(s)), Long.parseLong(m2.group(s)));
+								}
 
-					for (Integer tR_i : time_range_index) {
-						double pSum = 0;
-						for (Double v : PID_stat.get(tR_i)) {
-							pSum += v;
+								return res;
+
+							} else {
+								return o1.compareTo(o2);
+							}
 						}
-						pWri_PID_stat.printf(",%d,%s", PID_stat.get(tR_i).size(), pSum);
+					});
+					for (String sim_key : sim_keys) {
+						HashMap<Integer, ArrayList<Double>> morbidity_stat = area_under_curve.getValue().get(sim_key);
+						Integer[] time_range_index = morbidity_stat.keySet().toArray(new Integer[0]);
+						Arrays.sort(time_range_index);
+
+						pWri_PID_stat.printf("%s", sim_key);
+
+						for (Integer tR_i : time_range_index) {
+							double pSum = 0;
+							for (Double v : morbidity_stat.get(tR_i)) {
+								pSum += v;
+							}
+							pWri_PID_stat.printf(",%d,%s", morbidity_stat.get(tR_i).size(), pSum);
+						}
+
+						pWri_PID_stat.println();
+
 					}
 
-					pWri_PID_stat.println();
+					pWri_PID_stat.close();
 
 				}
-
-				pWri_PID_stat.close();
-
 			}
 		}
 	}

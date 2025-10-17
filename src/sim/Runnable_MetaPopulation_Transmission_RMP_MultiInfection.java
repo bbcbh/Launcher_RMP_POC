@@ -321,11 +321,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 	protected void testPerson(int currentTime, int pid_t, int infIncl, int siteIncl,
 			int[][] cumul_treatment_by_person) {
 		ArrayList<Integer> tested_positive = new ArrayList<>();
-
-		// Clone a copy of pre-test infection status
-		if (map_currrent_infection_stage.get(Math.abs(pid_t)) != null) {
-		}
-
+		
 		if (pid_t < 0) { // Assume test and treat as normal with symptoms
 			int[] preTreatCount = new int[NUM_INF];
 			for (int infId = 0; infId < NUM_INF; infId++) {
