@@ -85,9 +85,9 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 	// Key = pid, V = [inf_id][infection_start_time_1,
 	// infection_clear_time_1, infection_clear_reason...];
 	protected HashMap<Integer, ArrayList<ArrayList<Integer>>> infection_history = new HashMap<>();
-	private static final int INFECTION_HIST_CLEAR_NATURAL_RECOVERY = -1;
-	private static final int INFECTION_HIST_CLEAR_TREATMENT = -2;
-	private static final int INFECTION_HIST_OVERTREATMENT = -3;
+	public static final int INFECTION_HIST_CLEAR_NATURAL_RECOVERY = -1;
+	public static final int INFECTION_HIST_CLEAR_TREATMENT = -2;
+	public static final int INFECTION_HIST_OVERTREATMENT = -3;
 
 	// Movement
 	protected HashMap<String, LineCollectionEntry> movementCollections = new HashMap<>();
