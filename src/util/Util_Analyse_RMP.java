@@ -304,6 +304,7 @@ public class Util_Analyse_RMP {
 		return map_indiv_map;
 	}
 
+	public final static String SETTING_GLOBAL = "SETTING_GLOBAL"; // Map<String, Object> 
 	public final static String SETTING_GRP_INCL = "SETTING_GRP_INCL"; // Integer
 	public final static String SETTING_INF_INCL = "SETTING_INF_INCL"; // Integer
 	public final static String SETTING_SAMPLE_FREQ = "SETTING_SAMPLE_FREQ"; // Integer
@@ -344,6 +345,28 @@ public class Util_Analyse_RMP {
 
 		String[] dir_suffix_sel = sim_sel_map.keySet().toArray(new String[0]);
 		Arrays.sort(dir_suffix_sel);
+		
+		// Global factor - only support grp and inf so far
+		int global_grp_incl = Integer.MAX_VALUE;
+		int gloval_inf_incl = Integer.MAX_VALUE;
+		
+		HashMap<String, Object> global_map = (HashMap<String, Object>) morbidity_setting_all.get(SETTING_GLOBAL) ;
+				
+		if(global_map != null) {			
+			for(Entry<String, Object> ent_global: global_map.entrySet()) {
+				if(ent_global.getKey().equals(SETTING_GRP_INCL)) {
+					global_grp_incl = ((Integer) ent_global.getValue()).intValue();
+				}else if (ent_global.getKey().equals(SETTING_INF_INCL)) {
+					gloval_inf_incl = ((Integer) ent_global.getValue()).intValue();
+				}else {
+					System.err.printf("Warning!. Global setting \"%s\" not defined.\n");
+				}
+			}
+			
+			
+		}
+		
+		
 
 		for (File resultSetDir : sce_dir) {
 
@@ -418,23 +441,19 @@ public class Util_Analyse_RMP {
 								int person_id = Integer.parseInt(line[0]);
 								int inf_id = Integer.parseInt(line[1]);
 								String[] indiv_stat = lookup_demograhic.get(person_id);
-
+								int grp = Integer
+										.parseInt(indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_GRP + 1]);
 								int enter_at = Integer.parseInt(
 										indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_ENTER_POP_AT + 1]);
 								int exit_at = Integer
 										.parseInt(indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_EXIT_POP_AT + 1]);
+								
+								boolean incl_person = ((1 << grp) & global_grp_incl) != 0 
+										&& ((1 << inf_id) & global_grp_incl) != 0; 
 
 								// Only include individual within sample time window
-								if (sample_time[0] <= exit_at && enter_at <= sample_time[sample_time.length - 1]) {
-
-									infection_hist_extract_by_inf_simkey_person_id = infection_hist_extract_by_inf_simkey
-											.get(simKey);
-
-									if (infection_hist_extract_by_inf_simkey_person_id == null) {
-										infection_hist_extract_by_inf_simkey_person_id = new HashMap<>();
-										infection_hist_extract_by_inf_simkey.put(simKey,
-												infection_hist_extract_by_inf_simkey_person_id);
-									}
+								if (sample_time[0] <= exit_at && 
+										incl_person && enter_at <= sample_time[sample_time.length - 1]) {									
 									for (int inf_hist_index = 2; (inf_hist_index
 											+ 2) < line.length; inf_hist_index += 3) {
 										int inf_start = Integer.parseInt(line[inf_hist_index]);
@@ -444,10 +463,20 @@ public class Util_Analyse_RMP {
 										int treatment_type = inf_hist_index + 2 < line.length
 												? Integer.parseInt(line[inf_hist_index + 2])
 												: 0;
+										
 
 										// Include infection if in range, or morbidity_prob_map has
 										// entry
 										if (treatment_type != Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INFECTION_HIST_OVERTREATMENT) {
+											
+											infection_hist_extract_by_inf_simkey_person_id = infection_hist_extract_by_inf_simkey
+													.get(simKey);
+
+											if (infection_hist_extract_by_inf_simkey_person_id == null) {
+												infection_hist_extract_by_inf_simkey_person_id = new HashMap<>();
+												infection_hist_extract_by_inf_simkey.put(simKey,
+														infection_hist_extract_by_inf_simkey_person_id);
+											}
 
 											infection_hist_extract_entry = infection_hist_extract_by_inf_simkey_person_id
 													.get(person_id);
