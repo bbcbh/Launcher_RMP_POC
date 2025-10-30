@@ -16,20 +16,26 @@ import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import person.AbstractIndividualInterface;
 import sim.Abstract_Runnable_ClusterModel;
 import sim.Runnable_MetaPopulation_Transmission_RMP_MultiInfection;
 import sim.Simulation_ClusterModelTransmission;
 
 public class Util_Analyse_RMP {
 
-	public static void extract_num_infection_to_csv(File scenario_dirs_incl, int[][] colIndex)
+	public static void extract_inf_num_infection_to_csv(File scenario_dirs_incl, int[][] colIndex)
 			throws IOException, FileNotFoundException {
-		extract_num_infection_to_csv(new File[] { scenario_dirs_incl }, scenario_dirs_incl, colIndex);
+		extract_inf_stat_to_csv(new File[] { scenario_dirs_incl }, scenario_dirs_incl, colIndex,
+				"Infectious_Prevalence_Person_", "Inf_%d_num_of_infected.csv");
 	}
 
-	public static void extract_num_infection_to_csv(File[] scenario_dirs_incl, File output_dir, int[][] colIndex)
+	public static void extract_inf_incidence_to_csv(File scenario_dirs_incl, int[][] colIndex)
 			throws IOException, FileNotFoundException {
+		extract_inf_stat_to_csv(new File[] { scenario_dirs_incl }, scenario_dirs_incl, colIndex, "Incidence_Person_",
+				"Inf_%d_cumul_incidence.csv");
+	}
+
+	public static void extract_inf_stat_to_csv(File[] scenario_dirs_incl, File output_dir, int[][] colIndex,
+			String csvFeader, String fileOutputFormat) throws IOException, FileNotFoundException {
 		Comparator<File> cmp_file_suffix = generate_file_comparator_by_suffix();
 
 		ArrayList<String> array_qsub = new ArrayList<>();
@@ -42,13 +48,13 @@ public class Util_Analyse_RMP {
 			File[] singleResultSets = resultSetDir.listFiles(new FileFilter() {
 				@Override
 				public boolean accept(File pathname) {
-					return pathname.isDirectory() && !"PBS".equals(pathname.getName());
+					return pathname.isDirectory() && pathname.getName().startsWith(resultSetDir.getName());
 				}
 			});
 
 			Arrays.sort(singleResultSets, cmp_file_suffix);
 
-			Pattern pattern_num_inf_src = Pattern.compile("Infectious_Prevalence_Person_(-?\\d+).csv.7z");
+			Pattern pattern_num_inf_src = Pattern.compile(csvFeader + "(-?\\d+).csv.7z");
 
 			boolean completedSet = true;
 			for (File singleResultSet : singleResultSets) {
@@ -64,7 +70,12 @@ public class Util_Analyse_RMP {
 					System.err.printf("Error. Number of zip in %s != 1\n", singleResultSet.getName());
 					array_qsub.add(String.format("qsub %s.pbs\n", singleResultSet.getName()));
 					completedSet = false;
+				} else if (zips[0].length() == 0) {
+					System.err.printf("Error. Zip file of length 0 in %s != 1\n", singleResultSet.getName());
+					array_qsub.add(String.format("qsub %s.pbs\n", singleResultSet.getName()));
+					completedSet = false;
 				}
+
 			}
 
 			if (!completedSet) {
@@ -97,15 +108,15 @@ public class Util_Analyse_RMP {
 				HashMap<String, ArrayList<String[]>> linesMap = util.Util_7Z_CSV_Entry_Extract_Callable
 						.extractedLinesFrom7Zip(zips[0]);
 
-				Pattern pattern_inf_preval_header = Pattern
-						.compile("\\[(.+),(\\d+)\\]Infectious_Prevalence_Person_(-?\\d+)_(-?\\d+).csv");
+				Pattern pattern_inf_stat_header = Pattern
+						.compile("\\[(.+),(\\d+)\\]" + csvFeader + "(-?\\d+)_(-?\\d+).csv");
 
 				String[] keys = linesMap.keySet().toArray(new String[0]);
 				Arrays.sort(keys, new Comparator<String>() {
 					@Override
 					public int compare(String o1, String o2) {
-						Matcher m1 = pattern_inf_preval_header.matcher(o1);
-						Matcher m2 = pattern_inf_preval_header.matcher(o2);
+						Matcher m1 = pattern_inf_stat_header.matcher(o1);
+						Matcher m2 = pattern_inf_stat_header.matcher(o2);
 						if (m1.matches() && m2.matches()) {
 							int res = Integer.compare(Integer.parseInt(m1.group(2)), Integer.parseInt(m2.group(2)));
 							if (res == 0) {
@@ -134,7 +145,7 @@ public class Util_Analyse_RMP {
 							}
 							strBuild.append(',');
 							if (lineNum == 0) {
-								Matcher m = pattern_inf_preval_header.matcher(key);
+								Matcher m = pattern_inf_stat_header.matcher(key);
 								if (m.find()) {
 									strBuild.append(resultSetDir.getName());
 									strBuild.append(':');
@@ -165,8 +176,7 @@ public class Util_Analyse_RMP {
 
 			PrintWriter[] pWriters_num_infect = new PrintWriter[colIndex.length];
 			for (int p = 0; p < colIndex.length; p++) {
-				pWriters_num_infect[p] = new PrintWriter(
-						new File(output_dir, String.format("Inf_%d_num_of_infected.csv", p)));
+				pWriters_num_infect[p] = new PrintWriter(new File(output_dir, String.format(fileOutputFormat, p)));
 				for (StringBuilder lines : lines_all_inf.get(p)) {
 					pWriters_num_infect[p].println(lines.toString());
 				}
@@ -296,8 +306,9 @@ public class Util_Analyse_RMP {
 
 	public final static String SETTING_GRP_INCL = "SETTING_GRP_INCL"; // Integer
 	public final static String SETTING_INF_INCL = "SETTING_INF_INCL"; // Integer
-	public final static String SETTING_INC_INF_OUTSIDE_SAMPLE_RANGE = "SETTING_INC_INF_OUTSIDE_SAMPLE_RANGE"; // Boolean
 	public final static String SETTING_SAMPLE_FREQ = "SETTING_SAMPLE_FREQ"; // Integer
+	public final static String SETTING_EVENT_COUNT_LIMIT = "SETTING_EVENT_COUNT_LIMIT"; // Integer
+
 	public final static String SETTING_RATE_ADJ_BY_AGE = "SETTING_BIRTH_RATE"; // double[]
 	public final static String SETTING_SUBOUTCOMES = "SETTING_BIRTH_BASED_SUBOUTCOMES"; // String[]
 	public final static String SETTING_SUBOUTCOMES_SETTING = "SETTING_BIRTH_BASED_SUBOUTCOMES_SETTING"; // double[]
@@ -318,36 +329,18 @@ public class Util_Analyse_RMP {
 		final int GRP_INDEX_INF_HISTORY_HEADER_CMAP_SEED = 3;
 		final int GRP_INDEX_INF_HISTORY_HEADER_SIM_SEED = 4;
 
-		final int SWITCH_REASON_SAMPLE = 0;
-		final int SWITCH_REASON_AGING = SWITCH_REASON_SAMPLE + 1;
-		final int SWITCH_REASON_END_PRIMARY_MORBIDITY = SWITCH_REASON_AGING + 1;
-
 		// Key
-		// Lv 0: (String) morbid_key
-		// Lv 1: (Integer) inf_id or inf_incl
-		// Lv 2: (String) sim_key
-		// Lv 3: (Integer) sampleTime or person_id
+
+		// Lv 1: (String) sim_key
+		// Lv 2: (Integer) person_id
 		// Value: [Daily_Event_Probabiliy,From_Time,To_Time] or [Infect_start,
 		// Infect_end, infId]
 
-		HashMap<String, HashMap<Integer, HashMap<String, HashMap<Integer, ArrayList<Number[]>>>>> infection_hist_extract_all = new HashMap<>();
-		HashMap<Integer, HashMap<String, HashMap<Integer, ArrayList<Number[]>>>> infection_hist_extract_by_inf;
-		HashMap<String, HashMap<Integer, ArrayList<Number[]>>> infection_hist_extract_by_inf_simkey;
-		HashMap<Integer, ArrayList<Number[]>> infection_hist_extract_by_inf_simkey_intIndex;
+		HashMap<String, HashMap<Integer, ArrayList<Number[]>>> infection_hist_extract_by_inf_simkey = new HashMap<>();
+		HashMap<Integer, ArrayList<Number[]>> infection_hist_extract_by_inf_simkey_person_id;
 		ArrayList<Number[]> infection_hist_extract_entry;
 
 		Map<Integer, double[]> morbidity_prob_map;
-
-		// Initialise area_under_curve_by_inf for all infection
-		for (String morbid_key : morbidity_prob_map_all.keySet()) {
-			morbidity_prob_map = morbidity_prob_map_all.get(morbid_key);
-			infection_hist_extract_by_inf = new HashMap<>();
-			for (int inf : morbidity_prob_map.keySet()) {
-				infection_hist_extract_by_inf_simkey = new HashMap<>();
-				infection_hist_extract_by_inf.put(inf, infection_hist_extract_by_inf_simkey);
-			}
-			infection_hist_extract_all.put(morbid_key, infection_hist_extract_by_inf);
-		}
 
 		String[] dir_suffix_sel = sim_sel_map.keySet().toArray(new String[0]);
 		Arrays.sort(dir_suffix_sel);
@@ -423,9 +416,8 @@ public class Util_Analyse_RMP {
 
 							for (String[] line : ent.getValue()) {
 								int person_id = Integer.parseInt(line[0]);
+								int inf_id = Integer.parseInt(line[1]);
 								String[] indiv_stat = lookup_demograhic.get(person_id);
-								int grp = Integer
-										.parseInt(indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_GRP + 1]);
 
 								int enter_at = Integer.parseInt(
 										indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_ENTER_POP_AT + 1]);
@@ -434,401 +426,43 @@ public class Util_Analyse_RMP {
 
 								// Only include individual within sample time window
 								if (sample_time[0] <= exit_at && enter_at <= sample_time[sample_time.length - 1]) {
-									String[] morbid_key_arr = morbidity_prob_map_all.keySet().toArray(new String[0]);
 
-									for (String morbid_key : morbid_key_arr) {
-										int grp_incl = ((Number) morbidity_setting_all.get(morbid_key)
-												.get(SETTING_GRP_INCL)).intValue();
-										if ((grp_incl & (1 << grp)) != 0) {
-											Integer inf_id = Integer.parseInt(line[1]);
-											morbidity_prob_map = morbidity_prob_map_all.get(morbid_key);
-											// TODO: Remove alterative option
-											// if (morbidity_prob_map.isEmpty() || morbidity_prob_map.size() > 0) {
-											int inf_incl = ((Number) morbidity_setting_all.get(morbid_key)
-													.get(SETTING_INF_INCL)).intValue();
-											boolean all_inf_incl = morbidity_setting_all
-													.containsKey(SETTING_INC_INF_OUTSIDE_SAMPLE_RANGE);
+									infection_hist_extract_by_inf_simkey_person_id = infection_hist_extract_by_inf_simkey
+											.get(simKey);
 
-											infection_hist_extract_by_inf_simkey = infection_hist_extract_all
-													.get(morbid_key).get(inf_incl);
+									if (infection_hist_extract_by_inf_simkey_person_id == null) {
+										infection_hist_extract_by_inf_simkey_person_id = new HashMap<>();
+										infection_hist_extract_by_inf_simkey.put(simKey,
+												infection_hist_extract_by_inf_simkey_person_id);
+									}
+									for (int inf_hist_index = 2; (inf_hist_index
+											+ 2) < line.length; inf_hist_index += 3) {
+										int inf_start = Integer.parseInt(line[inf_hist_index]);
+										int inf_end = inf_hist_index + 1 < line.length
+												? Integer.parseInt(line[inf_hist_index + 1])
+												: Math.min(exit_at, sample_time[sample_time.length - 1]);
+										int treatment_type = inf_hist_index + 2 < line.length
+												? Integer.parseInt(line[inf_hist_index + 2])
+												: 0;
 
-											if (infection_hist_extract_by_inf_simkey == null) {
-												infection_hist_extract_by_inf_simkey = new HashMap<>();
-												infection_hist_extract_all.get(morbid_key).put(inf_incl,
-														infection_hist_extract_by_inf_simkey);
+										// Include infection if in range, or morbidity_prob_map has
+										// entry
+										if (treatment_type != Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INFECTION_HIST_OVERTREATMENT) {
+
+											infection_hist_extract_entry = infection_hist_extract_by_inf_simkey_person_id
+													.get(person_id);
+
+											if (infection_hist_extract_entry == null) {
+												infection_hist_extract_entry = new ArrayList<>();
+												infection_hist_extract_by_inf_simkey_person_id.put(person_id,
+														infection_hist_extract_entry);
 											}
-											infection_hist_extract_by_inf_simkey_intIndex = infection_hist_extract_by_inf_simkey
-													.get(simKey);
-
-											if (infection_hist_extract_by_inf_simkey_intIndex == null) {
-												infection_hist_extract_by_inf_simkey_intIndex = new HashMap<>();
-												infection_hist_extract_by_inf_simkey.put(simKey,
-														infection_hist_extract_by_inf_simkey_intIndex);
-											}
-											if ((inf_incl & (1 << inf_id)) != 0) {
-												for (int inf_hist_index = 2; (inf_hist_index
-														+ 2) < line.length; inf_hist_index += 3) {
-													int inf_start = Integer.parseInt(line[inf_hist_index]);
-													int inf_end = inf_hist_index + 1 < line.length
-															? Integer.parseInt(line[inf_hist_index + 1])
-															: Math.min(exit_at, sample_time[sample_time.length - 1]);
-													int treatment_type = inf_hist_index + 2 < line.length
-															? Integer.parseInt(line[inf_hist_index + 2])
-															: 0;
-
-													// Include infection if in range, or morbidity_prob_map has
-													// entry
-													if ((all_inf_incl || (inf_end >= sample_time[0]
-															&& inf_start <= sample_time[sample_time.length - 1]))
-															&& treatment_type != Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INFECTION_HIST_OVERTREATMENT) {
-
-														infection_hist_extract_entry = infection_hist_extract_by_inf_simkey_intIndex
-																.get(person_id);
-
-														if (infection_hist_extract_entry == null) {
-															infection_hist_extract_entry = new ArrayList<>();
-															infection_hist_extract_by_inf_simkey_intIndex.put(person_id,
-																	infection_hist_extract_entry);
-														}
-														infection_hist_extract_entry
-																.add(new Number[] { inf_start, inf_end, inf_id });
-
-													}
-												}
-											} // End of if ((inf_incl & (1 << inf_id)) != 0) {
-//											} else {
-//
-//												// Previeous verson - not ran
-//												int enter_age = Integer.parseInt(
-//														indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_ENTER_POP_AGE
-//																+ 1]);
-//
-//												// Moribidity
-//												if (morbidity_prob_map.containsKey(inf_id)) {
-//
-//													ArrayList<Number[]> indivdual_morbidity_hist = new ArrayList<>();
-//
-//													double[] morbidity_setting = morbidity_prob_map.get(inf_id);
-//
-//													infection_hist_extract_by_inf_simkey = infection_hist_extract_all
-//															.get(morbid_key).get(inf_id);
-//
-//													int past_inc_count = 0;
-//
-//													for (int inf_hist_index = 2; (inf_hist_index
-//															+ 2) < line.length; inf_hist_index += 3) {
-//														int inf_start = Integer.parseInt(line[inf_hist_index]);
-//														int inf_end = Integer.parseInt(line[inf_hist_index + 1]);
-//														int treatment_type = Integer.parseInt(line[inf_hist_index + 2]);
-//
-//														if (treatment_type != Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INFECTION_HIST_OVERTREATMENT) {
-//
-//															// Trim down duration (e.g. as in for PID)
-//															if (morbidity_setting[0] > 0) {
-//																inf_end = Math.min(
-//																		inf_start + (int) morbidity_setting[0],
-//																		inf_end);
-//															}
-//
-//															int pt_sample_time = Arrays.binarySearch(sample_time,
-//																	inf_end);
-//															if (pt_sample_time < 0) {
-//																pt_sample_time = ~pt_sample_time;
-//															}
-//
-//															// Trim at end sample time if needed
-//															pt_sample_time = Math.min(pt_sample_time,
-//																	sample_time.length - 1);
-//
-//															int numSetting = (morbidity_setting.length - 1) / 2;
-//															int pt_p = Arrays.binarySearch(morbidity_setting, 1,
-//																	numSetting, past_inc_count);
-//															if (pt_p < 0) {
-//																pt_p = ~pt_p;
-//															}
-//															double prob_morbidity_per_day = morbidity_setting[numSetting
-//																	+ pt_p];
-//
-//															Number[] morbidity_event_total = new Number[] {
-//																	prob_morbidity_per_day, inf_start, inf_end };
-//
-//															int pt_event = Collections.binarySearch(
-//																	indivdual_morbidity_hist, morbidity_event_total,
-//																	new Comparator<Number[]>() {
-//																		@Override
-//																		public int compare(Number[] o1, Number[] o2) {
-//																			return Integer.compare(o1[1].intValue(),
-//																					o2[1].intValue());
-//																		}
-//																	});
-//															indivdual_morbidity_hist.add(~pt_event,
-//																	morbidity_event_total);
-//
-//															while (pt_sample_time >= 1
-//																	&& inf_start < sample_time[pt_sample_time]) {
-//																int morbidity_dur_sample_time_start = Math.max(
-//																		inf_start, sample_time[pt_sample_time - 1]);
-//																int morbidity_dur_sample_time_end = Math.min(inf_end,
-//																		sample_time[pt_sample_time]);
-//
-//																infection_hist_extract_by_inf_simkey_intIndex = infection_hist_extract_by_inf_simkey
-//																		.get(simKey);
-//
-//																if (infection_hist_extract_by_inf_simkey_intIndex == null) {
-//																	infection_hist_extract_by_inf_simkey_intIndex = new HashMap<>();
-//																	infection_hist_extract_by_inf_simkey.put(simKey,
-//																			infection_hist_extract_by_inf_simkey_intIndex);
-//																}
-//
-//																infection_hist_extract_entry = infection_hist_extract_by_inf_simkey_intIndex
-//																		.get(pt_sample_time);
-//																if (infection_hist_extract_entry == null) {
-//																	infection_hist_extract_entry = new ArrayList<>();
-//																	infection_hist_extract_by_inf_simkey_intIndex.put(
-//																			pt_sample_time,
-//																			infection_hist_extract_entry);
-//																}
-//
-//																Number[] morbidity_event = new Number[] {
-//																		prob_morbidity_per_day,
-//																		morbidity_dur_sample_time_start,
-//																		morbidity_dur_sample_time_end };
-//
-//																infection_hist_extract_entry.add(morbidity_event);
-//
-//																pt_sample_time--;
-//															}
-//
-//															past_inc_count++;
-//														}
-//													} // End of checking infection history
-//
-//													String[] birth_rate_suboutcome_name = (String[]) morbidity_setting_all
-//															.get(morbid_key).get(SETTING_BIRTH_BASED_SUBOUTCOMES);
-//
-//													double[] birth_rate_by_age = (double[]) morbidity_setting_all
-//															.get(SETTING_BIRTH_RATE).get(SETTING_BIRTH_RATE);
-//
-//													if (birth_rate_suboutcome_name != null
-//															&& indivdual_morbidity_hist.size() > 0) {
-//
-//														// Switch time include:
-//														ArrayList<Integer> indiv_prob_switch_time = new ArrayList<>();
-//
-//														// Valid time range
-//														indiv_prob_switch_time.add(enter_at);
-//														indiv_prob_switch_time.add(sample_time[sample_time.length - 1]);
-//
-//														// Key = switch_time, V = Reason
-//
-//														HashMap<Integer, Integer> map_switch_time_reason = new HashMap<>();
-//
-//														// Add switch time for sampling time
-//														for (int switch_time_sample : sample_time) {
-//															map_switch_time_reason.put(switch_time_sample,
-//																	1 << SWITCH_REASON_SAMPLE);
-//														}
-//
-//														// Add switch time for change in birth rate due to aging
-//														for (int bAge = 0; bAge < birth_rate_by_age.length
-//																/ 2; bAge++) {
-//															int switch_time_age = ((int) birth_rate_by_age[bAge])
-//																	- enter_age + enter_at;
-//															int reason = map_switch_time_reason
-//																	.getOrDefault(switch_time_age, 0);
-//															map_switch_time_reason.put(switch_time_age,
-//																	reason | (1 << SWITCH_REASON_AGING));
-//														}
-//
-//														// Add switch time for end of infection
-//														HashMap<Integer, Number[]> map_moribity_end_time = new HashMap<>();
-//														ArrayList<Double> event_prob_arr_pre_sample_time = new ArrayList<>();
-//
-//														for (Number[] morbidity_stat : indivdual_morbidity_hist) {
-//															int inf_end = morbidity_stat[2].intValue();
-//															map_moribity_end_time.put(inf_end, morbidity_stat);
-//															if (inf_end < sample_time[0]) {
-//																event_prob_arr_pre_sample_time.add(1 - Math.pow(
-//																		1 - morbidity_stat[0].doubleValue(),
-//																		morbidity_stat[2].intValue()
-//																				- morbidity_stat[1].intValue()));
-//															}
-//															int reason = map_switch_time_reason.getOrDefault(inf_end,
-//																	0);
-//															map_switch_time_reason.put(inf_end, reason
-//																	| (1 << SWITCH_REASON_END_PRIMARY_MORBIDITY));
-//														}
-//														// Finalise switch time array
-//														for (int sTime : map_switch_time_reason.keySet()) {
-//															int pt_sw = Collections.binarySearch(indiv_prob_switch_time,
-//																	sTime);
-//															if (pt_sw < 0) {
-//																pt_sw = ~pt_sw;
-//																// Only add if they are in range
-//																if (pt_sw > 0
-//																		&& pt_sw < indiv_prob_switch_time.size()) {
-//																	indiv_prob_switch_time.add(pt_sw, sTime);
-//																}
-//															}
-//														}
-//
-//														// Birth rate by age
-//														int age_at_s_time = enter_age
-//																+ (indiv_prob_switch_time.get(0) - enter_at);
-//														int birth_age_pt = Arrays.binarySearch(birth_rate_by_age, 0,
-//																birth_rate_by_age.length / 2, age_at_s_time);
-//														if (birth_age_pt < 0) {
-//															birth_age_pt = ~birth_age_pt;
-//														}
-//														double last_birth_rate = birth_rate_by_age[birth_age_pt
-//																+ birth_rate_by_age.length / 2];
-//
-//														// Event probability
-//														HashMap<Integer, Double> prob_number_of_morbidity_event = new HashMap<>();
-//														prob_number_of_morbidity_event.put(0, 1.0);
-//
-//														double[] area_sum_sample_time = new double[birth_rate_suboutcome_name.length];
-//
-//														for (int switch_pt = 1; switch_pt < indiv_prob_switch_time
-//																.size(); switch_pt++) {
-//															int switch_time = indiv_prob_switch_time.get(switch_pt);
-//															int reason = map_switch_time_reason.get(switch_time);
-//
-//															// Update area_sum_sample_time if within sample time
-//															if (switch_time > sample_time[0] && indiv_prob_switch_time
-//																	.get(switch_pt - 1) < exit_at) {
-//
-//																// Update area_sum_sample_time
-//																for (int sub_outcome_index = 0; sub_outcome_index < birth_rate_suboutcome_name.length; sub_outcome_index++) {
-//																	// Format:
-//																	// {cat_0,cat_1,cat_2,...prob_cat_0,prob_cat_1,prob_cat_2...}
-//																	double[] sub_outcome_setting = ((double[][]) morbidity_setting_all
-//																			.get(morbid_key)
-//																			.get(SETTING_BIRTH_BASED_SUBOUTCOMES_SETTING))[sub_outcome_index];
-//
-//																	double adj_prob_by_num_event = 0;
-//																	for (Entry<Integer, Double> entry : prob_number_of_morbidity_event
-//																			.entrySet()) {
-//																		if (entry.getKey() >= sub_outcome_setting[0]) {
-//																			// Should not have sub outcome if no
-//																			// morbidity
-//																			// so
-//																			// far
-//																			int pt_event = Arrays.binarySearch(
-//																					sub_outcome_setting, 0,
-//																					sub_outcome_setting.length / 2,
-//																					entry.getKey().doubleValue());
-//																			if (pt_event < 0) {
-//																				pt_event = ~pt_event;
-//																			}
-//																			adj_prob_by_num_event += entry.getValue()
-//																					* sub_outcome_setting[Math.min(
-//																							pt_event + sub_outcome_setting.length
-//																									/ 2,
-//																							sub_outcome_setting.length
-//																									- 1)];
-//																		}
-//																	}
-//																	area_sum_sample_time[sub_outcome_index] += last_birth_rate
-//																			* adj_prob_by_num_event
-//																			* (Math.min(switch_time, exit_at)
-//																					- indiv_prob_switch_time
-//																							.get(switch_pt - 1));
-//																}
-//															}
-//
-//															// Handle sample time
-//															if ((reason & (1 << SWITCH_REASON_SAMPLE)) != 0) {
-//
-//																for (int sub_outcome_index = 0; sub_outcome_index < birth_rate_suboutcome_name.length; sub_outcome_index++) {
-//																	String sub_outcome_name = birth_rate_suboutcome_name[sub_outcome_index];
-//
-//																	// Initialise sub_outcome array
-//																	infection_hist_extract_by_inf = infection_hist_extract_all
-//																			.get(sub_outcome_name);
-//																	if (infection_hist_extract_by_inf == null) {
-//																		infection_hist_extract_by_inf = new HashMap<>();
-//																		infection_hist_extract_all.put(sub_outcome_name,
-//																				infection_hist_extract_by_inf);
-//																	}
-//
-//																	infection_hist_extract_by_inf_simkey = infection_hist_extract_by_inf
-//																			.get(inf_id);
-//																	if (infection_hist_extract_by_inf_simkey == null) {
-//																		infection_hist_extract_by_inf_simkey = new HashMap<>();
-//																		infection_hist_extract_by_inf.put(inf_id,
-//																				infection_hist_extract_by_inf_simkey);
-//																	}
-//
-//																	infection_hist_extract_by_inf_simkey_intIndex = infection_hist_extract_by_inf_simkey
-//																			.get(simKey);
-//																	if (infection_hist_extract_by_inf_simkey_intIndex == null) {
-//																		infection_hist_extract_by_inf_simkey_intIndex = new HashMap<>();
-//																		infection_hist_extract_by_inf_simkey.put(simKey,
-//																				infection_hist_extract_by_inf_simkey_intIndex);
-//																	}
-//
-//																	int pt_sample_time = Arrays
-//																			.binarySearch(sample_time, switch_time);
-//
-//																	infection_hist_extract_entry = infection_hist_extract_by_inf_simkey_intIndex
-//																			.get(pt_sample_time);
-//																	if (infection_hist_extract_entry == null) {
-//																		infection_hist_extract_entry = new ArrayList<>();
-//																		infection_hist_extract_by_inf_simkey_intIndex
-//																				.put(pt_sample_time,
-//																						infection_hist_extract_entry);
-//																	}
-//
-//																	if (area_sum_sample_time[sub_outcome_index] > 0) {
-//																		Number[] suboutcome_area_under_curve = new Number[] {
-//																				area_sum_sample_time[sub_outcome_index],
-//																				0, 1 };
-//																		infection_hist_extract_entry
-//																				.add(suboutcome_area_under_curve);
-//																	}
-//
-//																	// Clear store
-//																	area_sum_sample_time[sub_outcome_index] = 0;
-//																}
-//															}
-//															// Handle aging
-//															if ((reason & (1 << SWITCH_REASON_AGING)) != 0
-//																	&& switch_time < exit_at) {
-//																age_at_s_time = enter_age + (switch_time - enter_at)
-//																		+ 1;
-//																birth_age_pt = Arrays.binarySearch(birth_rate_by_age, 0,
-//																		birth_rate_by_age.length / 2, age_at_s_time);
-//																if (birth_age_pt < 0) {
-//																	birth_age_pt = ~birth_age_pt;
-//																}
-//																last_birth_rate = birth_rate_by_age[birth_age_pt
-//																		+ birth_rate_by_age.length / 2];
-//															}
-//
-//															// Handle morbidity incidence
-//															if ((reason
-//																	& (1 << SWITCH_REASON_END_PRIMARY_MORBIDITY)) != 0) {
-//																Number[] morbidity_stat = map_moribity_end_time
-//																		.get(switch_time);
-//
-//																double prob_morbidity_occured = 1
-//																		- Math.pow(1 - morbidity_stat[0].doubleValue(),
-//																				morbidity_stat[2].intValue()
-//																						- morbidity_stat[1].intValue());
-//
-//																update_prob_number_morbidity_event(
-//																		prob_number_of_morbidity_event,
-//																		prob_morbidity_occured);
-//
-//															}
-//														}
-//													} // End of if (birth_rate_suboutcome_name != null) {
-//												} // End of if (pid_prob_map.containsKey(inf_id)) {																														
-//											} // End of if (morbidity_prob_map.isEmpty()) { } else {...}
-										} // End of if ((grp_incl & (1 << grp)) != 0) {
-									} // End of for(String morbid_key : morbidity_prob_map_all.keySet()) {
-								}
+											infection_hist_extract_entry
+													.add(new Number[] { inf_start, inf_end, inf_id });
+										}
+									}
+								} // End of if (sample_time[0] <= exit_at && enter_at <=
+									// sample_time[sample_time.length - 1]) {
 							} // End of for (String[] line : ent.getValue()) {
 						} // End of if (sim_sel_values == null || Arrays.binarySearch(sim_sel_values,
 							// seedIdentifier) >= 0)
@@ -840,158 +474,153 @@ public class Util_Analyse_RMP {
 
 				// Print Result (per set version)
 
-				for (String morbid_key : infection_hist_extract_all.keySet()) {
-					for (Entry<Integer, HashMap<String, HashMap<Integer, ArrayList<Number[]>>>> infection_history_map_entry : infection_hist_extract_all
-							.get(morbid_key).entrySet()) {
+				for (String morbid_key : morbidity_prob_map_all.keySet()) {
 
-						if (infection_history_map_entry.getValue().size() > 0) {
-							String priWriterMapKey = String.format("%s_%s", morbid_key,
-									infection_history_map_entry.getKey());
+					String priWriterMapKey = morbid_key;
+					PrintWriter[] pWri_infect_hist_arr;
 
-							PrintWriter[] pWri_infect_hist_arr;
-							// Set up PrintWriters
+					int inf_incl = ((Number) morbidity_setting_all.get(morbid_key).get(SETTING_INF_INCL)).intValue();
+					int grp_incl = ((Number) morbidity_setting_all.get(morbid_key).get(SETTING_GRP_INCL)).intValue();
 
-							// Main
-							ArrayList<String> priWriter_keys_list = new ArrayList<>(List.of(priWriterMapKey));
-							ArrayList<String> fNames_list = new ArrayList<>(
-									List.of(String.format(morbid_key, infection_history_map_entry.getKey())));
+					// Set up PrintWriters
 
-							// Birth rate dependent sub_outcome
-							String[] morbidity_sub_outcome = (String[]) morbidity_setting_all.get(morbid_key)
-									.get(SETTING_SUBOUTCOMES);
-							if (morbidity_sub_outcome != null) {
-								for (String sub_outcome_name : morbidity_sub_outcome) {
-									priWriter_keys_list.add(String.format("%s_%s", morbid_key, sub_outcome_name));
-									fNames_list.add(sub_outcome_name);
+					// Main
+					ArrayList<String> priWriter_keys_list = new ArrayList<>(List.of(priWriterMapKey));
+					ArrayList<String> fNames_list = new ArrayList<>(List.of(morbid_key));
+
+					// Birth rate dependent sub_outcome
+					String[] morbidity_sub_outcome = (String[]) morbidity_setting_all.get(morbid_key)
+							.get(SETTING_SUBOUTCOMES);
+					if (morbidity_sub_outcome != null) {
+						for (String sub_outcome_name : morbidity_sub_outcome) {
+							priWriter_keys_list.add(String.format("%s_%s", morbid_key, sub_outcome_name));
+							fNames_list.add(sub_outcome_name);
+						}
+
+					}
+					pWri_infect_hist_arr = new PrintWriter[priWriter_keys_list.size()];
+					for (int i = 0; i < pWri_infect_hist_arr.length; i++) {
+						pWri_infect_hist_arr[i] = priWriter_map.get(priWriter_keys_list.get(i));
+						if (pWri_infect_hist_arr[i] == null) {
+							pWri_infect_hist_arr[i] = new PrintWriter(new File(output_dir, fNames_list.get(i)));
+							pWri_infect_hist_arr[i].print("SIM_ID");
+							int time_gap = 1;
+							if (morbidity_setting_all.get(morbid_key).containsKey(SETTING_SAMPLE_FREQ)) {
+								time_gap = ((Number) morbidity_setting_all.get(morbid_key).get(SETTING_SAMPLE_FREQ))
+										.intValue();
+
+							}
+							int s_time = sample_time[0];
+							while (s_time <= sample_time[sample_time.length - 1]) {
+								pWri_infect_hist_arr[i].print(',');
+								pWri_infect_hist_arr[i].print(s_time);
+								s_time += time_gap;
+							}
+							pWri_infect_hist_arr[i].println();
+							priWriter_map.put(priWriter_keys_list.get(i), pWri_infect_hist_arr[i]);
+							pWri_infect_hist_arr[i].flush();
+						}
+					}
+
+					String[] sim_keys = infection_hist_extract_by_inf_simkey.keySet().toArray(new String[0]);
+					Arrays.sort(sim_keys, new Comparator<String>() {
+						@Override
+						public int compare(String o1, String o2) {
+							Matcher m1 = sim_key_pattern.matcher(o1);
+							Matcher m2 = sim_key_pattern.matcher(o2);
+							if (m1.find() && m2.find()) {
+								int res = m1.group(1).compareTo(m2.group(1));
+								if (res == 0) {
+									res = m1.group(2).compareTo(m2.group(2));
+								}
+								for (int s = 3; s < Math.min(m1.groupCount(), m2.groupCount()) && res == 0; s++) {
+									res = Long.compare(Long.parseLong(m1.group(s)), Long.parseLong(m2.group(s)));
+								}
+								return res;
+							} else {
+								return o1.compareTo(o2);
+							}
+						}
+					});
+
+					for (String sim_key : sim_keys) {
+						infection_hist_extract_by_inf_simkey_person_id = infection_hist_extract_by_inf_simkey
+								.get(sim_key);
+
+						Matcher m_simkey = sim_key_pattern.matcher(sim_key);
+
+						if (!m_simkey.find()) {
+							System.err.printf("Ill-formed simKey='%s'.Entry skipped.\n", sim_key);
+						} else {
+							int time_gap = 1;
+							boolean cumulative_count = false;
+							int infection_count_limit = -1;
+
+							if (morbidity_setting_all.get(morbid_key).containsKey(SETTING_SAMPLE_FREQ)) {
+								cumulative_count = true;
+								time_gap = ((Number) morbidity_setting_all.get(morbid_key).get(SETTING_SAMPLE_FREQ))
+										.intValue();
+
+								if (morbidity_setting_all.get(morbid_key).containsKey(SETTING_EVENT_COUNT_LIMIT)) {
+									infection_count_limit = ((Integer) morbidity_setting_all.get(morbid_key)
+											.get(SETTING_EVENT_COUNT_LIMIT)).intValue();
 								}
 
 							}
-							pWri_infect_hist_arr = new PrintWriter[priWriter_keys_list.size()];
-							for (int i = 0; i < pWri_infect_hist_arr.length; i++) {
-								pWri_infect_hist_arr[i] = priWriter_map.get(priWriter_keys_list.get(i));
-								if (pWri_infect_hist_arr[i] == null) {
-									pWri_infect_hist_arr[i] = new PrintWriter(new File(output_dir, fNames_list.get(i)));
-									pWri_infect_hist_arr[i].print("SIM_ID");
-									int time_gap = 1;
-									if (morbidity_setting_all.get(morbid_key).containsKey(SETTING_SAMPLE_FREQ)) {
-										time_gap = ((Number) morbidity_setting_all.get(morbid_key)
-												.get(SETTING_SAMPLE_FREQ)).intValue();
 
-									}
-									int s_time = sample_time[0];
-									while (s_time <= sample_time[sample_time.length - 1]) {
-										pWri_infect_hist_arr[i].print(',');
-										pWri_infect_hist_arr[i].print(s_time);
-										s_time += time_gap;
-									}
-									pWri_infect_hist_arr[i].println();
-									priWriter_map.put(priWriter_keys_list.get(i), pWri_infect_hist_arr[i]);
-									pWri_infect_hist_arr[i].flush();
-								}
+							ArrayList<Integer> sample_time_list = new ArrayList<>();
+
+							int s_time = sample_time[0];
+							while (s_time <= sample_time[sample_time.length - 1]) {
+								sample_time_list.add(s_time);
+								s_time += time_gap;
 							}
 
-							String[] sim_keys = infection_history_map_entry.getValue().keySet().toArray(new String[0]);
-							Arrays.sort(sim_keys, new Comparator<String>() {
-								@Override
-								public int compare(String o1, String o2) {
-									Matcher m1 = sim_key_pattern.matcher(o1);
-									Matcher m2 = sim_key_pattern.matcher(o2);
-									if (m1.find() && m2.find()) {
-										int res = m1.group(1).compareTo(m2.group(1));
-										if (res == 0) {
-											res = m1.group(2).compareTo(m2.group(2));
-										}
-										for (int s = 3; s < Math.min(m1.groupCount(), m2.groupCount())
-												&& res == 0; s++) {
-											res = Long.compare(Long.parseLong(m1.group(s)),
-													Long.parseLong(m2.group(s)));
-										}
-										return res;
-									} else {
-										return o1.compareTo(o2);
-									}
-								}
-							});
+							Long cMapSeed = Long.parseLong(m_simkey.group(4));
 
-							for (String sim_key : sim_keys) {
-								infection_hist_extract_by_inf_simkey_intIndex = infection_history_map_entry.getValue()
-										.remove(sim_key);
+							if (morbidity_prob_map_all.get(morbid_key).isEmpty()) {
+								int[] data_by_sample_time = new int[sample_time_list.size()];
+								int[] indivdual_infected_record = new int[data_by_sample_time.length];
 
-								Matcher m_simkey = sim_key_pattern.matcher(sim_key);
+								for (Entry<Integer, ArrayList<Number[]>> inf_hist_ent : infection_hist_extract_by_inf_simkey_person_id
+										.entrySet()) {
+									int person_id = inf_hist_ent.getKey();
+									String[] indiv_stat = demographic.get(cMapSeed).get(person_id);
+									int grp = Integer
+											.parseInt(indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_GRP + 1]);
 
-								if (!m_simkey.find()) {
-									System.err.printf("Ill-formed simKey='%s'.Entry skipped.\n", sim_key);
-								} else {
+									if ((1 << grp & grp_incl) != 0) {
+										int enter_age = Integer.parseInt(
+												indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_ENTER_POP_AGE + 1]);
+										int enter_at = Integer.parseInt(
+												indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_ENTER_POP_AT + 1]);
+										int exit_at = Integer.parseInt(
+												indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_EXIT_POP_AT + 1]);
 
-									int time_gap = 1;
-									boolean measure_incidence = false;
+										ArrayList<Number[]> inf_hist = inf_hist_ent.getValue();
+										Arrays.fill(indivdual_infected_record, 0);
 
-									if (morbidity_setting_all.get(morbid_key).containsKey(SETTING_SAMPLE_FREQ)) {
-										measure_incidence = true;
-										time_gap = ((Number) morbidity_setting_all.get(morbid_key)
-												.get(SETTING_SAMPLE_FREQ)).intValue();
-
-									}
-
-									ArrayList<Integer> sample_time_list = new ArrayList<>();
-
-									int s_time = sample_time[0];
-									while (s_time <= sample_time[sample_time.length - 1]) {
-										sample_time_list.add(s_time);
-										s_time += time_gap;
-									}
-
-									Long cMapSeed = Long.parseLong(m_simkey.group(4));
-
-									if (morbidity_prob_map_all.get(morbid_key).isEmpty()) {
-										int[] person_day_infected = new int[sample_time_list.size()];
-										boolean[] indivdual_infected_record = new boolean[person_day_infected.length];
-										for (Entry<Integer, ArrayList<Number[]>> inf_hist_ent : infection_hist_extract_by_inf_simkey_intIndex
-												.entrySet()) {
-											int person_id = inf_hist_ent.getKey();
-											String[] indiv_stat = demographic.get(cMapSeed).get(person_id);
-											int enter_age = Integer.parseInt(
-													indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_ENTER_POP_AGE
-															+ 1]);
-											int enter_at = Integer.parseInt(
-													indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_ENTER_POP_AT
-															+ 1]);
-											int exit_at = Integer.parseInt(
-													indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_EXIT_POP_AT
-															+ 1]);
-
-											ArrayList<Number[]> inf_hist = inf_hist_ent.getValue();
-											Arrays.fill(indivdual_infected_record, false);
-
-											// inf_event format: new Number[] { inf_start, inf_end, inf_id }
-											for (Number[] inf_event : inf_hist) {
-
-												if (measure_incidence) {
+										// inf_event format: new Number[] { inf_start, inf_end, inf_id }
+										for (Number[] inf_event : inf_hist) {
+											if ((inf_incl & 1 << inf_event[2].intValue()) != 0) {
+												if (cumulative_count) {
 													int t_pt = Collections.binarySearch(sample_time_list,
 															inf_event[0].intValue());
 													if (t_pt < 0) {
 														t_pt = ~t_pt;
 													}
-													if (sample_time_list.get(t_pt) - inf_event[0].intValue() < time_gap
+													if (sample_time_list.get(t_pt) - time_gap < inf_event[0].intValue()
 															&& t_pt < sample_time_list.size()) {
-
-														if (!indivdual_infected_record[t_pt]) {
+														indivdual_infected_record[t_pt]++;
+														if (infection_count_limit == -1) {
 															// New infection
-															person_day_infected[t_pt]++;
-//															int age_at_time = enter_age
-//																	+ Math.min(exit_at, sample_time_list.get(t_pt))
-//																	- enter_at;
-//															int birth_age_pt = Arrays.binarySearch(birth_rate_by_age, 0,
-//																	birth_rate_by_age.length / 2, age_at_time);
-//															if (birth_age_pt < 0) {
-//																birth_age_pt = ~birth_age_pt;
-//															}
-//															person_day_infected_birth[t_pt] += 1 - Math
-//																	.pow(birth_rate_by_age[birth_rate_by_age.length / 2
-//																			+ birth_age_pt], time_gap);
-															indivdual_infected_record[t_pt] = true;
-
+															data_by_sample_time[t_pt]++;
+														} else {
+															if (indivdual_infected_record[t_pt] == infection_count_limit) {
+																data_by_sample_time[t_pt]++;
+															}
 														}
+
 													}
 												} else { // Measure prevalence
 													int sTime = inf_event[0].intValue();
@@ -1006,26 +635,10 @@ public class Util_Analyse_RMP {
 																t_pt = Collections.binarySearch(sample_time_list,
 																		sTime);
 															}
-															if (!indivdual_infected_record[t_pt]) {
-																person_day_infected[t_pt]++;
-//																if (pWri_infect_hist_arr.length > 1) {
-//																	int age_at_time = enter_age
-//																			+ Math.min(exit_at,
-//																					sample_time_list.get(t_pt))
-//																			- enter_at;
-//																	int birth_age_pt = Arrays.binarySearch(
-//																			birth_rate_by_age, 0,
-//																			birth_rate_by_age.length / 2, age_at_time);
-//																	if (birth_age_pt < 0) {
-//																		birth_age_pt = ~birth_age_pt;
-//																	}
-//																	person_day_infected_birth[t_pt] += 1 - Math.pow(
-//																			birth_rate_by_age[birth_rate_by_age.length
-//																					/ 2 + birth_age_pt],
-//																			time_gap);
-//																}
-																indivdual_infected_record[t_pt] = true;
+															if (indivdual_infected_record[t_pt] == 0) {
+																data_by_sample_time[t_pt]++;
 															}
+															indivdual_infected_record[t_pt]++;
 
 														}
 														sTime++;
@@ -1033,284 +646,281 @@ public class Util_Analyse_RMP {
 															t_pt++;
 														}
 													}
-
 												}
 											}
-
 										}
-										for (PrintWriter pWri : pWri_infect_hist_arr) {
-											pWri.printf("%s", sim_key);
+									}
+								}
+								for (PrintWriter pWri : pWri_infect_hist_arr) {
+									pWri.printf("%s", sim_key);
+								}
+
+								for (int i = 0; i < data_by_sample_time.length; i++) {
+									pWri_infect_hist_arr[0].printf(",%d", data_by_sample_time[i]);
+								}
+								pWri_infect_hist_arr[0].println();
+
+							} else { // !morbidity_prob_map_all.get(morbid_key).isEmpty()
+								morbidity_prob_map = morbidity_prob_map_all.get(morbid_key);
+								// Main outcome
+								double[] prob_morbidity_main = new double[sample_time_list.size()];
+								// Sub outcomes
+								double[][] cumul_prob_morbidity_suboutcomes = new double[0][];
+
+								if (morbidity_sub_outcome != null) {
+									cumul_prob_morbidity_suboutcomes = new double[morbidity_sub_outcome.length][sample_time_list
+											.size()];
+
+								}
+
+								for (Entry<Integer, ArrayList<Number[]>> inf_hist_ent : infection_hist_extract_by_inf_simkey_person_id
+										.entrySet()) {
+
+									int person_id = inf_hist_ent.getKey();
+									String[] indiv_stat = demographic.get(cMapSeed).get(person_id);
+									int enter_age = Integer.parseInt(
+											indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_ENTER_POP_AGE + 1]);
+									int enter_at = Integer.parseInt(
+											indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_ENTER_POP_AT + 1]);
+									int exit_at = Integer.parseInt(
+											indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_EXIT_POP_AT + 1]);
+									int past_inc_count = 0;
+
+									HashMap<Integer, Double> prob_number_of_morbidity_event = new HashMap<>();
+									prob_number_of_morbidity_event.put(0, 1.0);
+
+									// inf_event = new Number[] { inf_start, inf_end, inf_id }
+
+									int[][] inf_hist_adj = new int[inf_hist_ent.getValue().size()][3];
+
+									int pt_inf_hist_adj = 0;
+									// Trim down duration (e.g. as in for PID)
+
+									for (Number[] inf_event : inf_hist_ent.getValue()) {
+										inf_hist_adj[pt_inf_hist_adj][0] = inf_event[0].intValue();
+										inf_hist_adj[pt_inf_hist_adj][1] = inf_event[1].intValue();
+										inf_hist_adj[pt_inf_hist_adj][2] = inf_event[2].intValue();
+										double[] morbidity_setting = morbidity_prob_map
+												.get(inf_hist_adj[pt_inf_hist_adj][2]);
+
+										if (morbidity_setting[0] > 0) {
+											inf_hist_adj[pt_inf_hist_adj][1] = Math.min(
+													inf_hist_adj[pt_inf_hist_adj][0] + (int) morbidity_setting[0],
+													inf_hist_adj[pt_inf_hist_adj][1]);
 										}
 
-										for (int i = 0; i < person_day_infected.length; i++) {
-											pWri_infect_hist_arr[0].printf(",%d", person_day_infected[i]);
-										}
-										pWri_infect_hist_arr[0].println();
-
-//										if (pWri_infect_hist_arr.length > 1) {
-//											for (int i = 0; i < person_day_infected.length; i++) {
-//												pWri_infect_hist_arr[1].printf(",%f", person_day_infected_birth[i]);
-//											}
-//											pWri_infect_hist_arr[1].println();
-//										}
-
-									} else { // !morbidity_prob_map_all.get(morbid_key).isEmpty()
-										morbidity_prob_map = morbidity_prob_map_all.get(morbid_key);
-										// Main outcome
-										double[] prob_morbidity_main = new double[sample_time_list.size()];
-										// Sub outcomes
-										double[][] cumul_prob_morbidity_suboutcomes = new double[0][];										
-
-										if (morbidity_sub_outcome != null) {
-											cumul_prob_morbidity_suboutcomes = new double[morbidity_sub_outcome.length][sample_time_list
-													.size()];
-											
-										}
-
-										for (Entry<Integer, ArrayList<Number[]>> inf_hist_ent : infection_hist_extract_by_inf_simkey_intIndex
-												.entrySet()) {
-
-											int person_id = inf_hist_ent.getKey();
-											String[] indiv_stat = demographic.get(cMapSeed).get(person_id);
-											int enter_age = Integer.parseInt(
-													indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_ENTER_POP_AGE
-															+ 1]);
-											int enter_at = Integer.parseInt(
-													indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_ENTER_POP_AT
-															+ 1]);
-											int exit_at = Integer.parseInt(
-													indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_EXIT_POP_AT
-															+ 1]);
-											int past_inc_count = 0;
-											
-											HashMap<Integer, Double> prob_number_of_morbidity_event = new HashMap<>();										
-											prob_number_of_morbidity_event.put(0, 1.0);
-											
-
-											// inf_event = new Number[] { inf_start, inf_end, inf_id }
-
-											int[][] inf_hist_adj = new int[inf_hist_ent.getValue().size()][3];
-
-											int pt_inf_hist_adj = 0;
-											// Trim down duration (e.g. as in for PID)
-
-											for (Number[] inf_event : inf_hist_ent.getValue()) {
-												inf_hist_adj[pt_inf_hist_adj][0] = inf_event[0].intValue();
-												inf_hist_adj[pt_inf_hist_adj][1] = inf_event[1].intValue();
-												inf_hist_adj[pt_inf_hist_adj][2] = inf_event[2].intValue();
-												double[] morbidity_setting = morbidity_prob_map
-														.get(inf_hist_adj[pt_inf_hist_adj][2]);
-
-												if (morbidity_setting[0] > 0) {
-													inf_hist_adj[pt_inf_hist_adj][1] = Math.min(
-															inf_hist_adj[pt_inf_hist_adj][0]
-																	+ (int) morbidity_setting[0],
-															inf_hist_adj[pt_inf_hist_adj][1]);
-												}
-
-												pt_inf_hist_adj++;
+										pt_inf_hist_adj++;
+									}
+									Arrays.sort(inf_hist_adj, new Comparator<int[]>() {
+										@Override
+										public int compare(int[] o1, int[] o2) {
+											int res = 0;
+											for (int i = 0; i < Math.min(o1.length, o2.length) && res == 0; i++) {
+												res = Integer.compare(o1[i], o2[i]);
 											}
-											Arrays.sort(inf_hist_adj, new Comparator<int[]>() {
-												@Override
-												public int compare(int[] o1, int[] o2) {
-													int res = 0;													
-													for (int i = 0; i < Math.min(o1.length, o2.length)
-															&& res == 0; i++) {
-														res = Integer.compare(o1[i], o2[i]);
-													}
-													return res;
+											return res;
+										}
+									});
+
+									// Key = end inf time, V = prob_morbidity_by_inf_end
+									HashMap<Integer, ArrayList<Double>> main_morbidity_rec = new HashMap<>();
+
+									for (int[] inf_event : inf_hist_adj) {
+										int inf_start = inf_event[0];
+										if (inf_start < sample_time_list.get(sample_time_list.size() - 1)) {
+											int inf_end = Math.min(sample_time_list.get(sample_time_list.size() - 1),
+													inf_event[1]);
+											int inf_id = inf_event[2];
+											double[] morbidity_setting = morbidity_prob_map.get(inf_id);
+											int numSetting = (morbidity_setting.length - 1) / 2;
+											int pt_p = Arrays.binarySearch(morbidity_setting, 1, numSetting,
+													past_inc_count);
+											if (pt_p < 0) {
+												pt_p = ~pt_p;
+											}
+											double prob_morbidity_per_day = morbidity_setting[numSetting + pt_p];
+											double prob_morbidity_by_inf_end = 1
+													- Math.pow(1 - prob_morbidity_per_day, inf_end - inf_start);
+
+											// Update event count probability for pre-sample time
+											if (inf_end < sample_time_list.get(0)) {
+												update_prob_number_morbidity_event(prob_number_of_morbidity_event,
+														prob_morbidity_by_inf_end);
+											} else {
+												int pt_inf_end = Collections.binarySearch(sample_time_list, inf_end);
+												if (pt_inf_end < 0) {
+													pt_inf_end = ~pt_inf_end;
 												}
-											});
 
-											// Key = end inf time, V = prob_morbidity_by_inf_end
-											HashMap<Integer, ArrayList<Double>> main_morbidity_rec = new HashMap<>();
+												// Calculate the probability of main morbidity
+												prob_morbidity_main[pt_inf_end] += prob_morbidity_by_inf_end;
 
-											for (int[] inf_event : inf_hist_adj) {
-												int inf_start = inf_event[0];
-												if (inf_start < sample_time_list.get(sample_time_list.size() - 1)) {
-													int inf_end =  Math.min(sample_time_list.get(sample_time_list.size() - 1),inf_event[1]);
-													int inf_id = inf_event[2];
-													double[] morbidity_setting = morbidity_prob_map.get(inf_id);
-													int numSetting = (morbidity_setting.length - 1) / 2;
-													int pt_p = Arrays.binarySearch(morbidity_setting, 1, numSetting,
-															past_inc_count);
-													if (pt_p < 0) {
-														pt_p = ~pt_p;
-													}
-													double prob_morbidity_per_day = morbidity_setting[numSetting
-															+ pt_p];
-													double prob_morbidity_by_inf_end = 1
-															- Math.pow(1 - prob_morbidity_per_day, inf_end - inf_start);
+												ArrayList<Double> prob = main_morbidity_rec.get(inf_end);
+												if (prob == null) {
+													prob = new ArrayList<>();
+													main_morbidity_rec.put(inf_end, prob);
+												}
+												prob.add(prob_morbidity_by_inf_end);
+											}
+											past_inc_count++;
+										}
 
-													// Update event count probability for pre-sample time
-													if (inf_end < sample_time_list.get(0) - time_gap) {
+									} // End of checking single individual infection history
+
+									if (morbidity_sub_outcome != null) {
+										int start_time = Math.max(enter_at, sample_time_list.get(0));
+										int end_time = Math.min(exit_at,
+												sample_time_list.get(sample_time_list.size() - 1));
+
+										Integer[] main_morbidity_rec_time = main_morbidity_rec.keySet()
+												.toArray(new Integer[0]);
+										Arrays.sort(main_morbidity_rec_time);
+
+										int morbidity_rec_time_pt = 0;
+										int sample_time_rec_pt = Collections.binarySearch(sample_time_list, start_time);
+										if (sample_time_rec_pt < 0) {
+											sample_time_rec_pt = ~sample_time_rec_pt;
+										}
+
+										double[][] adj_rate_by_age = new double[morbidity_sub_outcome.length][];
+										int[] adj_rate_pt = new int[adj_rate_by_age.length];
+										Arrays.fill(adj_rate_pt, -1);
+
+										// Set up birth rate look up if needed
+										for (int sub_outcome_index = 0; sub_outcome_index < morbidity_sub_outcome.length; sub_outcome_index++) {
+											String sub_outcome_name = morbidity_sub_outcome[sub_outcome_index];
+											adj_rate_by_age[sub_outcome_index] = (double[]) morbidity_setting_all
+													.get(sub_outcome_name).get(SETTING_RATE_ADJ_BY_AGE);
+
+											if (adj_rate_by_age[sub_outcome_index] != null) {
+												int age_start = enter_age + start_time - enter_at;
+												adj_rate_pt[sub_outcome_index] = Arrays.binarySearch(
+														adj_rate_by_age[sub_outcome_index], 0,
+														adj_rate_by_age[sub_outcome_index].length / 2, age_start);
+												if (adj_rate_pt[sub_outcome_index] < 0) {
+													adj_rate_pt[sub_outcome_index] = ~adj_rate_pt[sub_outcome_index];
+												}
+											}
+										}
+										double[] adj_prob_by_num_event_suboutcome = new double[morbidity_sub_outcome.length];
+										Arrays.fill(adj_prob_by_num_event_suboutcome, Double.NaN);
+
+										int start_time_index = Collections.binarySearch(sample_time_list, start_time);
+										if (start_time_index < 0) {
+											start_time_index = ~start_time_index;
+										}
+
+										int end_time_index = Collections.binarySearch(sample_time_list, end_time);
+										if (end_time_index < 0) {
+											end_time_index = ~end_time_index;
+										}
+
+										for (int sTime_pt = start_time_index; sTime_pt <= end_time_index; sTime_pt++) {
+
+											int sTime = sample_time_list.get(sTime_pt);
+
+											while (morbidity_rec_time_pt < main_morbidity_rec_time.length
+													&& main_morbidity_rec_time[morbidity_rec_time_pt]
+															.intValue() <= sTime) {
+												for (Double prob : main_morbidity_rec
+														.get(main_morbidity_rec_time[morbidity_rec_time_pt])) {
+													if (prob != null) {
 														update_prob_number_morbidity_event(
-																prob_number_of_morbidity_event,
-																prob_morbidity_by_inf_end);
-													} else {
-														int pt_inf_end = Collections.binarySearch(sample_time_list,
-																inf_end);
-														if (pt_inf_end < 0) {
-															pt_inf_end = ~pt_inf_end;
-														}
-
-														// Calculate the probability of main morbidity
-														prob_morbidity_main[pt_inf_end] += prob_morbidity_by_inf_end;
-
-														ArrayList<Double> prob = main_morbidity_rec.get(inf_end);
-														if (prob == null) {
-															prob = new ArrayList<>();
-															main_morbidity_rec.put(inf_end, prob);
-														}
-														prob.add(prob_morbidity_by_inf_end);
-													}
-													past_inc_count++;
-												}
-
-											} // End of checking single individual infection history
-
-											if (morbidity_sub_outcome != null) {
-												int start_time = Math.max(enter_at, sample_time_list.get(0) - time_gap);
-												int end_time = Math.min(exit_at,
-														sample_time_list.get(sample_time_list.size() - 1));
-
-												Integer[] main_morbidity_rec_time = main_morbidity_rec.keySet()
-														.toArray(new Integer[0]);
-												Arrays.sort(main_morbidity_rec_time);
-												int morbidity_rec_time_pt = 0;
-												int sample_time_rec_pt = Collections.binarySearch(sample_time_list,
-														start_time);
-												if (sample_time_rec_pt < 0) {
-													sample_time_rec_pt = ~sample_time_rec_pt;
-												}
-
-												double[][] adj_rate_by_age = new double[morbidity_sub_outcome.length][];
-												int[] adj_rate_pt = new int[adj_rate_by_age.length];
-												Arrays.fill(adj_rate_pt, -1);
-
-												// Set up birth rate look up if needed
-												for (int sub_outcome_index = 0; sub_outcome_index < morbidity_sub_outcome.length; sub_outcome_index++) {
-													String sub_outcome_name = morbidity_sub_outcome[sub_outcome_index];
-													adj_rate_by_age[sub_outcome_index] = (double[]) morbidity_setting_all
-															.get(sub_outcome_name).get(SETTING_RATE_ADJ_BY_AGE);
-
-													if (adj_rate_by_age[sub_outcome_index] != null) {
-														int age_start = enter_age + start_time - enter_at;
-														adj_rate_pt[sub_outcome_index] = Arrays.binarySearch(
-																adj_rate_by_age[sub_outcome_index], 0,
-																adj_rate_by_age[sub_outcome_index].length / 2,
-																age_start);
-														if (adj_rate_pt[sub_outcome_index] < 0) {
-															adj_rate_pt[sub_outcome_index] = ~adj_rate_pt[sub_outcome_index];
-														}
+																prob_number_of_morbidity_event, prob.doubleValue());
 													}
 												}
 
-												for (int sTime = start_time; sTime <= end_time; sTime++) {
-													while (sTime > sample_time_list.get(sample_time_rec_pt)) {
-														sample_time_rec_pt++;
-													}
+												morbidity_rec_time_pt++;
 
-													if (morbidity_rec_time_pt < main_morbidity_rec_time.length
-															&& sTime == main_morbidity_rec_time[morbidity_rec_time_pt]
-																	.intValue()) {
-														for (Double prob : main_morbidity_rec
-																.get(main_morbidity_rec_time[morbidity_rec_time_pt])) {
-															if (prob != null) {
-																update_prob_number_morbidity_event(
-																		prob_number_of_morbidity_event,
-																		prob.doubleValue());
-															}
-														}
-														morbidity_rec_time_pt++;
-													}
-
-													for (int sub_outcome_index = 0; sub_outcome_index < morbidity_sub_outcome.length; sub_outcome_index++) {
-														String sub_outcome_name = morbidity_sub_outcome[sub_outcome_index];
-														double rate_adj = 1;
-														// Check if birth_rate adjustment is needed
-														if (adj_rate_by_age[sub_outcome_index] != null) {
-															double[] adj_rate = adj_rate_by_age[sub_outcome_index];
-
-															int age_sTime = enter_age + sTime - enter_at;
-															while (adj_rate_pt[sub_outcome_index] < adj_rate.length / 2
-																	&& age_sTime > adj_rate[adj_rate_pt[sub_outcome_index]]) {
-																adj_rate_pt[sub_outcome_index]++;
-															}
-															rate_adj = adj_rate[adj_rate.length / 2
-																	+ adj_rate_pt[sub_outcome_index]];
-														}
-
-														// Format:
-														// {cat_0,cat_1,cat_2,...prob_cat_0,prob_cat_1,prob_cat_2...}
-														double[] sub_outcome_setting = ((double[]) morbidity_setting_all
-																.get(sub_outcome_name)
-																.get(SETTING_SUBOUTCOMES_SETTING));
-
-														double adj_prob_by_num_event = 0;
-														for (Entry<Integer, Double> entry : prob_number_of_morbidity_event
-																.entrySet()) {
-															if (entry.getKey() >= sub_outcome_setting[0]) {
-																// Should not have sub outcome if no
-																// morbidity so far
-																int pt_event = Arrays.binarySearch(sub_outcome_setting,
-																		0, sub_outcome_setting.length / 2,
-																		entry.getKey().doubleValue());
-																if (pt_event < 0) {
-																	pt_event = ~pt_event;
-																}
-																adj_prob_by_num_event += entry.getValue()
-																		* sub_outcome_setting[Math.min(
-																				pt_event + sub_outcome_setting.length
-																						/ 2,
-																				sub_outcome_setting.length - 1)];
-															}
-														}
-
-														if (sample_time_rec_pt < sample_time_list.size() && (rate_adj
-																* adj_prob_by_num_event > 0)) {
-
-															cumul_prob_morbidity_suboutcomes[sub_outcome_index][sample_time_rec_pt] += rate_adj
-																	* adj_prob_by_num_event;
-														}
-													}
-
-												}
+												// Recalculate adj_prob_by_num_event_suboutcome
+												Arrays.fill(adj_prob_by_num_event_suboutcome, Double.NaN);
 											}
 
-										}
-										// End of checking end all individual
-										// i.e., for (Entry<Integer, ArrayList<Number[]>> inf_hist_ent :
-										// infection_hist_extract_by_inf_simkey_intIndex.entrySet()) {
-
-										for (PrintWriter pWri : pWri_infect_hist_arr) {
-											pWri.printf("%s", sim_key);
-										}
-										for (int i = 0; i < prob_morbidity_main.length; i++) {
-											pWri_infect_hist_arr[0].printf(",%f", prob_morbidity_main[i]);
-										}
-										if (morbidity_sub_outcome != null) {
 											for (int sub_outcome_index = 0; sub_outcome_index < morbidity_sub_outcome.length; sub_outcome_index++) {
-												double[] sub_outcome = cumul_prob_morbidity_suboutcomes[sub_outcome_index];
-												for (int i = 0; i < sub_outcome.length; i++) {
-													pWri_infect_hist_arr[sub_outcome_index + 1].printf(",%f",
-															sub_outcome[i]);
+												String sub_outcome_name = morbidity_sub_outcome[sub_outcome_index];
+												double rate_adj = 1;
+												// Check if birth_rate adjustment is needed
+												if (adj_rate_by_age[sub_outcome_index] != null) {
+													double[] adj_rate = adj_rate_by_age[sub_outcome_index];
+
+													int age_sTime = enter_age + sTime - enter_at;
+													while (adj_rate_pt[sub_outcome_index] < adj_rate.length / 2
+															&& age_sTime > adj_rate[adj_rate_pt[sub_outcome_index]]) {
+														adj_rate_pt[sub_outcome_index]++;
+													}
+													rate_adj = adj_rate[adj_rate.length / 2
+															+ adj_rate_pt[sub_outcome_index]];
 												}
-												pWri_infect_hist_arr[sub_outcome_index + 1].println();
+
+												// Format:
+												// {cat_0,cat_1,cat_2,...prob_cat_0,prob_cat_1,prob_cat_2...}
+												double[] sub_outcome_setting = ((double[]) morbidity_setting_all
+														.get(sub_outcome_name).get(SETTING_SUBOUTCOMES_SETTING));
+
+												if (Double.isNaN(adj_prob_by_num_event_suboutcome[sub_outcome_index])) {
+
+													double adj_prob_by_num_event = 0;
+													for (Entry<Integer, Double> entry : prob_number_of_morbidity_event
+															.entrySet()) {
+														if (entry.getKey() >= sub_outcome_setting[0]) {
+															// Should not have sub outcome if no
+															// morbidity so far
+															int pt_event = Arrays.binarySearch(sub_outcome_setting, 0,
+																	sub_outcome_setting.length / 2,
+																	entry.getKey().doubleValue());
+															if (pt_event < 0) {
+																pt_event = ~pt_event;
+															}
+															adj_prob_by_num_event += entry.getValue()
+																	* sub_outcome_setting[Math.min(
+																			pt_event + sub_outcome_setting.length / 2,
+																			sub_outcome_setting.length - 1)];
+														}
+													}
+
+													adj_prob_by_num_event_suboutcome[sub_outcome_index] = adj_prob_by_num_event;
+												}
+
+												if (sTime_pt < sample_time_list.size() && (rate_adj
+														* adj_prob_by_num_event_suboutcome[sub_outcome_index] > 0)) {
+
+													cumul_prob_morbidity_suboutcomes[sub_outcome_index][sTime_pt] += rate_adj
+															* adj_prob_by_num_event_suboutcome[sub_outcome_index];
+												}
 											}
+
 										}
 									}
 
 								}
+								// End of checking end all individual
+								// i.e., for (Entry<Integer, ArrayList<Number[]>> inf_hist_ent :
+								// infection_hist_extract_by_inf_simkey_intIndex.entrySet()) {
 
-							}
-
-							for (PrintWriter pWri : pWri_infect_hist_arr) {
-								pWri.flush();
+								for (PrintWriter pWri : pWri_infect_hist_arr) {
+									pWri.printf("%s", sim_key);
+								}
+								for (int i = 0; i < prob_morbidity_main.length; i++) {
+									pWri_infect_hist_arr[0].printf(",%f", prob_morbidity_main[i]);
+								}
+								pWri_infect_hist_arr[0].println();
+								if (morbidity_sub_outcome != null) {
+									for (int sub_outcome_index = 0; sub_outcome_index < morbidity_sub_outcome.length; sub_outcome_index++) {
+										double[] sub_outcome = cumul_prob_morbidity_suboutcomes[sub_outcome_index];
+										for (int i = 0; i < sub_outcome.length; i++) {
+											pWri_infect_hist_arr[sub_outcome_index + 1].printf(",%f", sub_outcome[i]);
+										}
+										pWri_infect_hist_arr[sub_outcome_index + 1].println();
+									}
+								}
 							}
 
 						}
+						for (PrintWriter pWri : pWri_infect_hist_arr) {
+							pWri.flush();
+						}
 					}
+
 				}
 			} // End of for (File singleResultSet : singleResultSets) {
 
