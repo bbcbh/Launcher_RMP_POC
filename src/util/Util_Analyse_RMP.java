@@ -2,15 +2,22 @@ package util;
 
 import java.io.File;
 import java.io.FileFilter;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.InvalidPropertiesFormatException;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -20,16 +27,16 @@ import sim.Simulation_ClusterModelTransmission;
 
 public class Util_Analyse_RMP {
 
-	public static void extract_inf_num_infection_to_csv(File scenario_dirs_incl, int[][] colIndex)
+	public static void extract_inf_num_infection_to_csv(File scenario_dirs_incl, int[][] colIndex, String fname)
 			throws IOException, FileNotFoundException {
 		extract_inf_stat_to_csv(new File[] { scenario_dirs_incl }, scenario_dirs_incl, colIndex,
-				"Infectious_Prevalence_Person_", "Inf_%d_num_of_infected.csv");
+				"Infectious_Prevalence_Person_", fname);
 	}
 
-	public static void extract_inf_incidence_to_csv(File scenario_dirs_incl, int[][] colIndex)
+	public static void extract_inf_incidence_to_csv(File scenario_dirs_incl, int[][] colIndex, String fname)
 			throws IOException, FileNotFoundException {
 		extract_inf_stat_to_csv(new File[] { scenario_dirs_incl }, scenario_dirs_incl, colIndex, "Incidence_Person_",
-				"Inf_%d_cumul_incidence.csv");
+				fname);
 	}
 
 	public static void extract_inf_stat_to_csv(File[] scenario_dirs_incl, File output_dir, int[][] colIndex,
@@ -468,6 +475,9 @@ public class Util_Analyse_RMP {
 					HashMap<String, ArrayList<String[]>> linesMap = util.Util_7Z_CSV_Entry_Extract_Callable
 							.extractedLinesFrom7Zip(outcomeZipFile);
 
+					System.out.printf("Extracting of %s completed. Time elapsed = %.3fs\n",
+							outcomeZipFile.getAbsolutePath(), (System.currentTimeMillis() - tic) / 1000.0);
+
 					Matcher m_zip = pattern_inf_hist_zip.matcher(inf_hist_zips[0].getName());
 					m_zip.matches();
 
@@ -508,8 +518,6 @@ public class Util_Analyse_RMP {
 								int exit_at = Integer
 										.parseInt(indiv_stat[Abstract_Runnable_ClusterModel.POP_INDEX_EXIT_POP_AT + 1]);
 
-								
-								
 								// Only include individual within sample time window
 								boolean incl_person = ((1 << grp) & global_grp_incl) != 0
 										&& ((1 << inf_id) & gloval_inf_incl) != 0 && sample_time[0] < exit_at
@@ -517,8 +525,7 @@ public class Util_Analyse_RMP {
 								if (incl_person) {
 									ArrayList<int[]> infection_hist_extract_entry = new ArrayList<>();
 
-									for (int inf_hist_index = 2;  inf_hist_index < line.length; 
-											inf_hist_index += 3) {
+									for (int inf_hist_index = 2; inf_hist_index < line.length; inf_hist_index += 3) {
 										int inf_start = Integer.parseInt(line[inf_hist_index]);
 										int inf_end = inf_hist_index + 1 < line.length
 												? Integer.parseInt(line[inf_hist_index + 1])
@@ -532,25 +539,27 @@ public class Util_Analyse_RMP {
 										if (treatment_type != Runnable_MetaPopulation_Transmission_RMP_MultiInfection.INFECTION_HIST_OVERTREATMENT) {
 											infection_hist_extract_entry.add(new int[] { inf_start, inf_end, inf_id });
 										}
-									}									
-									if(infection_hist_extract_entry.size() > 0) {
-										int[][] inf_hist = infection_hist_extract_entry.toArray(new int[0][]);										
+									}
+									if (infection_hist_extract_entry.size() > 0) {
+										int[][] inf_hist = infection_hist_extract_entry.toArray(new int[0][]);
 										int[][] org_inf_hist = infection_hist_extract_by_person_id.get(person_id);
-										
-										if(org_inf_hist != null) {
+
+										if (org_inf_hist != null) {
 											int org_end = org_inf_hist.length;
-											org_inf_hist = Arrays.copyOf(org_inf_hist, org_inf_hist.length + inf_hist.length);
-											System.arraycopy( inf_hist, 0, org_inf_hist, org_end, inf_hist.length);
+											org_inf_hist = Arrays.copyOf(org_inf_hist,
+													org_inf_hist.length + inf_hist.length);
+											System.arraycopy(inf_hist, 0, org_inf_hist, org_end, inf_hist.length);
 											inf_hist = org_inf_hist;
-										}										
-										infection_hist_extract_by_person_id.put(person_id,inf_hist);
+										}
+										infection_hist_extract_by_person_id.put(person_id, inf_hist);
 									}
 								}
 
 							} // End of reading (String[] line : ent.getValue()) {
 
-							System.out.printf("Reading infection history from  %s completed. Time elapsed = %.3fs\n",
-									simKey, (System.currentTimeMillis() - tic) / 1000.0);
+							// System.out.printf("Extraction of infection history for %s completed. Time
+							// elapsed = %.3fs\n",
+							// simKey, (System.currentTimeMillis() - tic) / 1000.0);
 
 							// Calculation
 							Matcher m_simkey = sim_key_pattern.matcher(simKey);
@@ -581,7 +590,7 @@ public class Util_Analyse_RMP {
 										}
 									} else {
 										morbid_incidence_count.add(morbid_key);
-										indivdual_incidence_record_map.put(morbid_key,null);
+										indivdual_incidence_record_map.put(morbid_key, null);
 									}
 								}
 
@@ -680,21 +689,56 @@ public class Util_Analyse_RMP {
 
 									} // End of checking infection history
 
-									// Incidence count
+									// Incidence or prevalence count
 									for (String morbid_key : morbid_incidence_count) {
 										int[] morbidty_indivdual_incidence_record = indivdual_incidence_record_map
 												.get(morbid_key);
 										double[] data_by_sample_time = sample_data_map.get(morbid_key);
-										int infection_count_min_limit = 1;
-
+										int infection_count_min_limit = -1;
 										if (morbidity_setting_all.get(morbid_key)
 												.containsKey(SETTING_EVENT_COUNT_MIN_LIMIT)) {
 											infection_count_min_limit = ((Integer) morbidity_setting_all.get(morbid_key)
 													.get(SETTING_EVENT_COUNT_MIN_LIMIT)).intValue();
-										}
-										for (int t = 0; t < data_by_sample_time.length; t++) {
-											if (morbidty_indivdual_incidence_record[t] >= infection_count_min_limit) {
-												data_by_sample_time[t]++;
+
+											for (int t = 0; t < data_by_sample_time.length; t++) {
+												if (morbidty_indivdual_incidence_record[t] >= infection_count_min_limit) {
+													data_by_sample_time[t]++;
+												}
+											}
+										} else {
+
+											int inf_incl = ((Number) morbidity_setting_all.get(morbid_key)
+													.get(SETTING_INF_INCL)).intValue();
+											int grp_incl = ((Number) morbidity_setting_all.get(morbid_key)
+													.get(SETTING_GRP_INCL)).intValue();
+											if (((1 << grp) & grp_incl) != 0) {
+
+												int[] morbidty_sample_time = sample_columns_map.get(morbid_key);
+												boolean[] hasInf = new boolean[morbidty_sample_time.length];
+												for (int[] inf_event : inf_hist) {
+													if (((1 << inf_event[2]) & inf_incl) != 0) {
+														int data_sample_time_pt_start = Arrays
+																.binarySearch(morbidty_sample_time, inf_event[0]);
+														if (data_sample_time_pt_start < 0) {
+															data_sample_time_pt_start = ~data_sample_time_pt_start;
+														}
+														int data_sample_time_pt_end = Arrays.binarySearch(
+																morbidty_sample_time, Math.min(inf_event[1], exit_at));
+														if (data_sample_time_pt_end < 0) {
+															data_sample_time_pt_end = ~data_sample_time_pt_end;
+														}
+														if (data_sample_time_pt_start >= 0
+																&& data_sample_time_pt_end < data_by_sample_time.length) {
+															for (int t = data_sample_time_pt_start; t < data_sample_time_pt_end; t++) {
+																if (!hasInf[t]) {
+																	data_by_sample_time[t]++;
+																	hasInf[t] = true;
+																}
+															}
+														}
+													}
+
+												}
 											}
 										}
 									}
@@ -772,9 +816,10 @@ public class Util_Analyse_RMP {
 														past_inc_count);
 												if (pt_p < 0) {
 													pt_p = ~pt_p;
-												}												
-												
-												double prob_morbidity_per_day = morbidity_setting[Math.min(numSetting + pt_p, morbidity_setting.length-1)];
+												}
+
+												double prob_morbidity_per_day = morbidity_setting[Math
+														.min(numSetting + pt_p, morbidity_setting.length - 1)];
 												double prob_morbidity_by_inf_end = 1
 														- Math.pow(1 - prob_morbidity_per_day, inf_end - inf_start);
 
@@ -821,14 +866,14 @@ public class Util_Analyse_RMP {
 
 												ArrayList<Double> event_prop_arr = main_morbidity_rec
 														.remove(event_time);
-												
+
 												// If multiple event occurs on same time, use 1- Product((1-p_n))
 												double prob_non_event = 1;
 												for (Double prob_morbidity_by_inf_end : event_prop_arr) {
-													prob_non_event *= (1- prob_morbidity_by_inf_end.doubleValue());
-												}												
+													prob_non_event *= (1 - prob_morbidity_by_inf_end.doubleValue());
+												}
 												update_prob_number_morbidity_event(prob_number_of_morbidity_event,
-														1-prob_non_event);
+														1 - prob_non_event);
 
 												for (int sub_outcome_index = 0; sub_outcome_index < morbidity_sub_outcome.length; sub_outcome_index++) {
 													String sub_outcome_name = morbidity_sub_outcome[sub_outcome_index];
@@ -841,7 +886,7 @@ public class Util_Analyse_RMP {
 													}
 
 													int[] search_col = sample_columns_map.get(sub_outcome_name);
-													double[] data_arr_indiv = data_arr_indiv_all[sub_outcome_index];													
+													double[] data_arr_indiv = data_arr_indiv_all[sub_outcome_index];
 
 													int sample_time_search_from = event_time;
 													int sample_time_search_end = exit_at;
@@ -862,7 +907,7 @@ public class Util_Analyse_RMP {
 														update_end = ~update_end;
 													}
 
-													double[] indivdual_event_prob = new double[max_event_count+1];
+													double[] indivdual_event_prob = new double[max_event_count + 1];
 
 													for (Entry<Integer, Double> prob_event : prob_number_of_morbidity_event
 															.entrySet()) {
@@ -914,14 +959,19 @@ public class Util_Analyse_RMP {
 								output_map.put(simKey, output_by_zip);
 							}
 
-							System.out.printf("Reading infection history from  \"%s\" completed. Time req. = %.3fs\n",
-									simKey, (System.currentTimeMillis() - tic) / 1000.0);
+							// System.out.printf("Infection history calculation for %s completed. Time
+							// elapsed. = %.3fs\n",
+							// simKey, (System.currentTimeMillis() - tic) / 1000.0);
 
 						} // End of read all from selected sim
 
 					} // End of looking up inf_hist_zips
 
 					// Potential end of thread
+
+					System.out.printf(
+							"Infection history calculation for zip file %s completed. Time elapsed. = %.3fs\n",
+							outcomeZipFile.getAbsolutePath(), (System.currentTimeMillis() - tic) / 1000.0);
 
 					// Combine output for all
 					output_map_all.putAll(output_map);
@@ -978,6 +1028,109 @@ public class Util_Analyse_RMP {
 
 		prob_number_of_morbidity_event.put(event_count_arr[event_count_arr.length - 1] + 1,
 				preProb * prob_morbidity_by_inf_end);
+	}
+
+	public static final String XML_SETTING_SAMPLE_TIME = "XML_SETTING_SAMPLE_TIME";
+	public static final String XML_SETTING_DEMOGRAPHIC_DIR = "XML_SETTING_DEMOGRAPHIC_DIR";
+	public static final String XML_SETTING_MORBIDITY_KEY_ARR = "XML_SETTING_MORBIDITY_KEY_ARR";
+	public static final String XML_SETTING_MORBIDITY_FORMAT = "XML_SETTING_MORBIDITY_FORMAT_%s";
+
+	public static void exportSimSelMap(HashMap<String, ArrayList<String>> sim_sel_map, File xml_prop)
+			throws FileNotFoundException, IOException {
+		String[] sim_sel_key = sim_sel_map.keySet().toArray(new String[0]);
+		Arrays.sort(sim_sel_key, new Comparator<String>() {
+			@Override
+			public int compare(String o1, String o2) {
+				return Integer.compare(Integer.parseInt(o1), Integer.parseInt(o2));
+			}
+		});
+		Properties export_prop = new Properties();
+		for (String k : sim_sel_key) {
+			StringBuilder line = new StringBuilder();
+			for (String ent : sim_sel_map.get(k)) {
+				if (line.length() != 0) {
+					line.append(',');
+				}
+				line.append(ent);
+			}
+			export_prop.put(k, line.toString());
+		}
+		System.out.printf("Col select map exported to %s.\n", xml_prop.getAbsolutePath());
+		DateTimeFormatter dateformatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+		FileOutputStream fout = new FileOutputStream(xml_prop);
+		export_prop.storeToXML(fout, String.format("Generated at %s", LocalDateTime.now().format(dateformatter)));
+		fout.close();
+	}
+
+	public static HashMap<String, ArrayList<String>> importSimSelMap(File xml_prop)
+			throws InvalidPropertiesFormatException, IOException {
+		Properties prop = new Properties();
+		FileInputStream fin = new FileInputStream(xml_prop);
+		prop.loadFromXML(fin);
+		fin.close();
+		HashMap<String, ArrayList<String>> sim_sel_map = new HashMap<>();
+		for (String k : prop.stringPropertyNames()) {
+			String[] val = prop.getProperty(k).split(",");
+			sim_sel_map.put(k, new ArrayList<>(List.of(val)));
+		}
+		return sim_sel_map;
+	}
+
+	public static void exportMorbiditySetting(String demoFileLoc, int[] sample_time, String[] morbidity_keys,
+			Map<String, Map<String, Object>> morbidity_setting, File xml_setting)
+			throws FileNotFoundException, IOException {
+		String morbidity_key_arr_str = Arrays.deepToString(morbidity_keys).replaceAll("\\s", "");
+		Properties setting_prop = new Properties();
+		setting_prop.put(XML_SETTING_SAMPLE_TIME, Arrays.toString(sample_time));
+		setting_prop.put(XML_SETTING_DEMOGRAPHIC_DIR, demoFileLoc);
+		setting_prop.put(XML_SETTING_MORBIDITY_KEY_ARR,
+				morbidity_key_arr_str.substring(1, morbidity_key_arr_str.length() - 1));
+
+		String settingFormat = XML_SETTING_MORBIDITY_FORMAT;
+
+		for (Entry<String, Map<String, Object>> ent : morbidity_setting.entrySet()) {
+			StringBuilder strBuilder = new StringBuilder();
+			for (String mapKey : ent.getValue().keySet()) {
+				String entStr;
+
+				Object val = ent.getValue().get(mapKey);
+
+				if (mapKey.equals(SETTING_PROB_MAP)) {
+					StringBuilder sub_ent = new StringBuilder();
+					@SuppressWarnings("unchecked")
+					Map<Integer, double[]> prob_map = (Map<Integer, double[]>) val;
+					for (Entry<Integer, double[]> entDouble : prob_map.entrySet()) {
+						if (sub_ent.length() != 0) {
+							sub_ent.append(',');
+						}
+						sub_ent.append(
+								String.format("%d:%s", entDouble.getKey(), Arrays.toString(entDouble.getValue())));
+					}
+
+					entStr = sub_ent.toString().replaceAll("\\s", "");
+
+				} else {
+					if (val instanceof Object[]) {
+						entStr = Arrays.deepToString((Object[]) val);
+					} else if (val instanceof int[]) {
+						entStr = Arrays.toString((int[]) val);
+					} else {
+						entStr = val.toString();
+					}
+
+				}
+
+				strBuilder.append(String.format("\n%s=%s", mapKey, entStr));
+			}
+
+			setting_prop.put(String.format(settingFormat, ent.getKey()), strBuilder.toString());
+
+		}
+
+		DateTimeFormatter dateformatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+		FileOutputStream fout = new FileOutputStream(xml_setting);
+		setting_prop.storeToXML(fout, String.format("Generated at %s", LocalDateTime.now().format(dateformatter)));
+		fout.close();
 	}
 
 }
