@@ -321,6 +321,17 @@ public class Util_Analyse_RMP {
 	public final static String SETTING_SUBOUTCOMES = "SETTING_SUBOUTCOMES"; // String[]
 
 	public final static Pattern sim_key_pattern = Pattern.compile("(.*):.*_(\\d+)\\((-?\\d+)_(-?\\d+)_(-?\\d+)\\)");
+	
+	public final static Map<String, Class<?>> CLASSMAP_SETTING = Map.ofEntries(
+			Map.entry(SETTING_GRP_INCL, Integer.class),
+			Map.entry(SETTING_INF_INCL, Integer.class),
+			Map.entry(SETTING_SAMPLE_FREQ, Integer.class),
+			Map.entry(SETTING_EVENT_COUNT_MIN_LIMIT, Integer.class),
+			Map.entry(SETTING_PROB_MAP, Map.class),
+			Map.entry(SETTING_BY_INDIVDUAL_AGE, int[].class),
+			Map.entry(SETTING_PROB_COUNT_MAX_LIMIT, Integer.class),			
+			Map.entry(SETTING_SUBOUTCOMES, String[].class));
+	
 
 	// morbidity_setting_all = Number[] {grp_incl}
 
