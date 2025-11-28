@@ -1,7 +1,6 @@
 package sim;
 
 import java.io.File;
-import java.io.FileFilter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -11,52 +10,19 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map.Entry;
 import java.util.Properties;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import person.AbstractIndividualInterface;
 import relationship.ContactMap;
 import util.LineCollectionEntry;
 
-public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Runnable_ClusterModel_MultiTransmission {
+public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection_POC
+		extends Abstract_Runnable_MetaPopulation_Transmission_RMP_MultiInfection {
 
 	public static final int SITE_VAGINA = 0;
 	public static final int SITE_PENIS = SITE_VAGINA + 1;
 	public static final int SITE_ANY = SITE_PENIS + 1; // Not Used
 	
-	protected final File dir_demographic;
-	protected int lastIndivdualUpdateTime = 0;
-
-	// Pop stat will be the stat prior to simulation
-	protected HashMap<Integer, int[]> indiv_map = new HashMap<>();
-	public static final int INDIV_MAP_CURRENT_GRP = 0;
-	public static final int INDIV_MAP_ENTER_POP_AGE = INDIV_MAP_CURRENT_GRP + 1;
-	public static final int INDIV_MAP_ENTER_POP_AT = INDIV_MAP_ENTER_POP_AGE + 1;
-	public static final int INDIV_MAP_EXIT_POP_AT = INDIV_MAP_ENTER_POP_AT + 1;
-	public static final int INDIV_MAP_HOME_LOC = INDIV_MAP_EXIT_POP_AT + 1;
-	public static final int INDIV_MAP_ENTER_GRP = INDIV_MAP_HOME_LOC + 1;
-	public static final int INDIV_MAP_CURRENT_LOC = INDIV_MAP_ENTER_GRP + 1;
-	public static final int LENGTH_INDIV_MAP = INDIV_MAP_CURRENT_LOC + 1;
-
-	// Key = Grp
-	protected HashMap<Integer, ArrayList<Integer>> current_pids_by_gps = new HashMap<>();
-	protected int[][] grp_age_range = null;
-
-	// Key = Time, V = ArrayList<int[]{pid,grp_from,grp_to}>
-	protected HashMap<Integer, ArrayList<int[]>> schdule_grp_change = new HashMap<>();
-	private static final Comparator<int[]> comparator_grp_change = new Comparator<int[]>() {
-		@Override
-		public int compare(int[] o1, int[] o2) {
-			int res = 0;
-			for (int i = 0; i < Math.min(o1.length, o2.length) && res == 0; i++) {
-				res = Integer.compare(o1[i], o2[i]);
-			}
-			return res;
-		}
-	};
-	protected static final int SCH_GRP_PID = 0;
-	protected static final int SCH_GRP_FROM = SCH_GRP_PID + 1;
-	protected static final int SCH_GRP_TO = SCH_GRP_FROM + 1;
+	protected static final int[] COL_SEL_INF_GENDER = null;
 
 	protected int lastTestSch_update = -1;
 
@@ -65,7 +31,6 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 	// Retesting
 	protected static final int FIELD_TESTING_RETEST_POS_INF_INCL = FIELD_TESTING_RATE_COVERAGE + 1;
 	protected static final int FIELD_TESTING_RETEST_PROB_START = FIELD_TESTING_RETEST_POS_INF_INCL + 1;
-
 
 	// Key = time
 	// V= new Object[] {
@@ -79,55 +44,8 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 	private static final int NUM_SITE = 3;
 	private static final int NUM_ACT = 1;
 
-	private static final int[] COL_SEL_INF_GENDER = null;
-
-	// For infection tracking
-	// Key = pid, V = [inf_id][infection_start_time_1,
-	// infection_clear_time_1, infection_clear_reason...];
-	protected HashMap<Integer, ArrayList<ArrayList<Integer>>> infection_history = new HashMap<>();
-	public static final int INFECTION_HIST_CLEAR_NATURAL_RECOVERY = -1;
-	public static final int INFECTION_HIST_CLEAR_TREATMENT = -2;
-	public static final int INFECTION_HIST_OVERTREATMENT = -3;
-
-	// Movement
-	protected HashMap<String, LineCollectionEntry> movementCollections = new HashMap<>();
-	protected HashMap<Integer, ArrayList<Integer>> visitor_pids_by_loc = new HashMap<>();
-	protected int lastMovement_update = -1;
-
-	// Output
-	protected static final String key_pop_size = "EXPORT_POP_SIZE";
-	protected static final String FILENAME_EXPORT_POP_SIZE = "Pop_size_%d_%d.csv";
-
-	private boolean preloadFile = false;
-
-	public Runnable_MetaPopulation_Transmission_RMP_MultiInfection(long cMap_seed, long sim_seed, Properties prop) {
-		super(cMap_seed, sim_seed, null, prop, NUM_INF, NUM_SITE, NUM_ACT);
-		this.setBaseDir((File) prop.get(Simulation_RMP.PROP_BASEDIR));
-		this.setBaseProp(prop);
-		this.dir_demographic = new File(baseProp.getProperty(Simulation_RMP.PROP_CONTACT_MAP_LOC));
-
-		Pattern pattern_movement_csv = Pattern.compile(Runnable_Demographic_Generation.FILENAME_FORMAT_MOVEMENT
-				.replaceAll("%d", Long.toString(cMap_seed)).replaceAll("%s", "(\\\\d+_\\\\d+)"));
-
-		File[] movement_csvs = dir_demographic.listFiles(new FileFilter() {
-			@Override
-			public boolean accept(File pathname) {
-				return pattern_movement_csv.matcher(pathname.getName()).matches();
-			}
-		});
-		for (File mv : movement_csvs) {
-			try {
-				Matcher m = pattern_movement_csv.matcher(mv.getName());
-				m.matches();
-				LineCollectionEntry ent = new LineCollectionEntry(mv, preloadFile);
-				ent.loadNextLine();
-				ent.loadNextLine(); // Skip Header
-				movementCollections.put(m.group(1), ent);
-			} catch (IOException e) {
-				e.printStackTrace(System.err);
-			}
-		}
-
+	public Runnable_MetaPopulation_Transmission_RMP_MultiInfection_POC(long cMap_seed, long sim_seed, Properties prop) {
+		super(cMap_seed, sim_seed, prop, NUM_INF, NUM_SITE, NUM_ACT);
 	}
 
 	@Override
@@ -154,7 +72,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 	public Integer[] getCurrentPopulationPId(int time) {
 		updateIndivMap(time);
 		ArrayList<Integer> pids = new ArrayList<>();
-		for (ArrayList<Integer> pid_by_grp : current_pids_by_gps.values()) {
+		for (ArrayList<Integer> pid_by_grp : current_pids_by_grp.values()) {
 			pids.addAll(pid_by_grp);
 		}
 		return pids.toArray(new Integer[0]);
@@ -214,7 +132,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 			}
 			int[] pop_size = new int[NUM_GRP];
 			for (int g = 0; g < pop_size.length; g++) {
-				pop_size[g] = current_pids_by_gps.get(g).size();
+				pop_size[g] = current_pids_by_grp.get(g).size();
 			}
 			countMap.put(currentTime, pop_size);
 		}
@@ -321,7 +239,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 	protected void testPerson(int currentTime, int pid_t, int infIncl, int siteIncl,
 			int[][] cumul_treatment_by_person) {
 		ArrayList<Integer> tested_positive = new ArrayList<>();
-		
+
 		if (pid_t < 0) { // Assume test and treat as normal with symptoms
 			int[] preTreatCount = new int[NUM_INF];
 			for (int infId = 0; infId < NUM_INF; infId++) {
@@ -498,20 +416,18 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 					if (match) {
 						double[] retestDefMatch = testRateDef;
 						double pRetest = RNG.nextDouble(); // Retest Range
-						int retest_range_offset =  (retestDefMatch.length - FIELD_TESTING_RETEST_PROB_START)/2;
-						int pt_pRestest = Arrays.binarySearch(
-								retestDefMatch, FIELD_TESTING_RETEST_PROB_START, 
-								FIELD_TESTING_RETEST_PROB_START+retest_range_offset-1, pRetest);
-						
-						if(pt_pRestest <0) {
+						int retest_range_offset = (retestDefMatch.length - FIELD_TESTING_RETEST_PROB_START) / 2;
+						int pt_pRestest = Arrays.binarySearch(retestDefMatch, FIELD_TESTING_RETEST_PROB_START,
+								FIELD_TESTING_RETEST_PROB_START + retest_range_offset - 1, pRetest);
+
+						if (pt_pRestest < 0) {
 							pt_pRestest = ~pt_pRestest;
-						}						
-						pt_pRestest = pt_pRestest + retest_range_offset;												
-						
-						if (pt_pRestest+1 < retestDefMatch.length) {
-							int retest_time = currentTime + (int) retestDefMatch[pt_pRestest]
-									+ RNG.nextInt((int) retestDefMatch[pt_pRestest+1]
-											- (int) retestDefMatch[pt_pRestest]);
+						}
+						pt_pRestest = pt_pRestest + retest_range_offset;
+
+						if (pt_pRestest + 1 < retestDefMatch.length) {
+							int retest_time = currentTime + (int) retestDefMatch[pt_pRestest] + RNG
+									.nextInt((int) retestDefMatch[pt_pRestest + 1] - (int) retestDefMatch[pt_pRestest]);
 
 							ArrayList<int[]> sch_test = schedule_testing.get(retest_time);
 							if (sch_test == null) {
@@ -693,7 +609,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 				int iIncl = (int) testRateDef[FIELD_TESTING_RATE_BY_RISK_CATEGORIES_INF_INCLUDE_INDEX];
 				for (int g = 0; g < NUM_GRP; g++) {
 					if ((gIncl & 1 << g) != 0) {
-						num_test_candidate_per_def += current_pids_by_gps.get(g).size();
+						num_test_candidate_per_def += current_pids_by_grp.get(g).size();
 					}
 				}
 				int num_tests_peformed_per_def = (int) Math
@@ -701,7 +617,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 				int person_index = 0;
 				for (int g = 0; g < NUM_GRP; g++) {
 					if ((gIncl & 1 << g) != 0) {
-						for (Integer pid : current_pids_by_gps.get(g)) {
+						for (Integer pid : current_pids_by_grp.get(g)) {
 							if (RNG.nextInt(num_test_candidate_per_def - person_index) < num_tests_peformed_per_def) {
 								int testDate = testStartTime + RNG.nextInt(AbstractIndividualInterface.ONE_YEAR_INT);
 								if (testDate < exitPopAt(pid)) {
@@ -749,11 +665,11 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 					indiv_stat[INDIV_MAP_CURRENT_GRP] = indiv_grp_change[SCH_GRP_TO];
 					pop_stat.get(pid)[POP_INDEX_GRP] = Integer.toString(indiv_stat[INDIV_MAP_CURRENT_GRP]);
 					if (indiv_grp_change[SCH_GRP_FROM] != -1) {
-						grpPids = current_pids_by_gps.get(indiv_grp_change[SCH_GRP_FROM]);
+						grpPids = current_pids_by_grp.get(indiv_grp_change[SCH_GRP_FROM]);
 						grpPids.remove(Collections.binarySearch(grpPids, pid));
 					}
 					if (indiv_grp_change[SCH_GRP_TO] != -1) {
-						grpPids = current_pids_by_gps.get(indiv_grp_change[SCH_GRP_TO]);
+						grpPids = current_pids_by_grp.get(indiv_grp_change[SCH_GRP_TO]);
 						grpPids.add(~Collections.binarySearch(grpPids, pid), pid);
 					}
 
@@ -781,10 +697,10 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection extends Run
 
 			// ENTER_POP_AT : Fill current_pids_by_gps and schdule_grp_change for
 			if (indiv_stat[INDIV_MAP_ENTER_POP_AT] == lastIndivdualUpdateTime) {
-				ArrayList<Integer> grpPids = current_pids_by_gps.get(indiv_stat[INDIV_MAP_CURRENT_GRP]);
+				ArrayList<Integer> grpPids = current_pids_by_grp.get(indiv_stat[INDIV_MAP_CURRENT_GRP]);
 				if (grpPids == null) {
 					grpPids = new ArrayList<>();
-					current_pids_by_gps.put(indiv_stat[INDIV_MAP_CURRENT_GRP], grpPids);
+					current_pids_by_grp.put(indiv_stat[INDIV_MAP_CURRENT_GRP], grpPids);
 				}
 				grpPids.add(~Collections.binarySearch(grpPids, pid), pid);
 
