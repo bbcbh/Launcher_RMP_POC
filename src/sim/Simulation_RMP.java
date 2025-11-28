@@ -10,16 +10,16 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import util.Util_Analyse_RMP;
+import util.Util_Analyse_MetaPopulation;
 
 public class Simulation_RMP extends Simulation_ClusterModelTransmission {
 
-	public static final String PROP_BASEDIR = Abstract_Runnable_MetaPopulation_Transmission_RMP_MultiInfection.PROP_BASEDIR;
-	public static final String PROP_LOC_MAP = Abstract_Runnable_MetaPopulation_Transmission_RMP_MultiInfection.PROP_LOC_MAP;
-	public static final String PROP_PRELOAD_FILES = Abstract_Runnable_MetaPopulation_Transmission_RMP_MultiInfection.PROP_PRELOAD_FILES;
-	public static final String PROP_INDIV_STAT = Abstract_Runnable_MetaPopulation_Transmission_RMP_MultiInfection.PROP_INDIV_STAT;
-	public static final String PROP_PARNTER_EXTRA_SOUGHT = Abstract_Runnable_MetaPopulation_Transmission_RMP_MultiInfection.PROP_PARNTER_EXTRA_SOUGHT;
-	public static final String PROP_CONTACT_MAP_LOC = Abstract_Runnable_MetaPopulation_Transmission_RMP_MultiInfection.PROP_CONTACT_MAP_LOC;
+	public static final String PROP_BASEDIR = Simulation_Gen_MetaPop.PROP_BASEDIR;
+	public static final String PROP_LOC_MAP = Simulation_Gen_MetaPop.PROP_LOC_MAP;
+	public static final String PROP_PRELOAD_FILES = Simulation_Gen_MetaPop.PROP_PRELOAD_FILES;
+	public static final String PROP_INDIV_STAT = Simulation_Gen_MetaPop.PROP_INDIV_STAT;
+	public static final String PROP_PARNTER_EXTRA_SOUGHT = Simulation_Gen_MetaPop.PROP_PARNTER_EXTRA_SOUGHT;
+	public static final String PROP_CONTACT_MAP_LOC = Simulation_Gen_MetaPop.PROP_CONTACT_MAP_LOC;
 
 	public static void main(String[] args) throws IOException, InterruptedException {
 		final String USAGE_INFO = String.format(
@@ -44,19 +44,19 @@ public class Simulation_RMP extends Simulation_ClusterModelTransmission {
 					fin.close();
 
 					int[] sample_time = (int[]) util.PropValUtils
-							.propStrToObject(prop.getProperty(Util_Analyse_RMP.XML_SETTING_SAMPLE_TIME), int[].class);
-					HashMap<Long, HashMap<Integer, String[]>> demographic = Util_Analyse_RMP
+							.propStrToObject(prop.getProperty(Util_Analyse_MetaPopulation.XML_SETTING_SAMPLE_TIME), int[].class);
+					HashMap<Long, HashMap<Integer, String[]>> demographic = Util_Analyse_MetaPopulation
 							.generate_demographic_mapping_from_file(
-									new File(prop.getProperty(Util_Analyse_RMP.XML_SETTING_DEMOGRAPHIC_DIR)));
-					String[] morbidity_key_arr = prop.getProperty(Util_Analyse_RMP.XML_SETTING_MORBIDITY_KEY_ARR)
+									new File(prop.getProperty(Util_Analyse_MetaPopulation.XML_SETTING_DEMOGRAPHIC_DIR)));
+					String[] morbidity_key_arr = prop.getProperty(Util_Analyse_MetaPopulation.XML_SETTING_MORBIDITY_KEY_ARR)
 							.replaceAll("\\s", "").split(",");
 
 					Map<String, Map<String, Object>> morbidity_setting = new HashMap<>();
 
 					Pattern pattern_morbidity_setting = Pattern
-							.compile(Util_Analyse_RMP.XML_SETTING_MORBIDITY_FORMAT.replaceAll("%s", "(.*)"));
+							.compile(Util_Analyse_MetaPopulation.XML_SETTING_MORBIDITY_FORMAT.replaceAll("%s", "(.*)"));
 
-					Map<String, Class<?>> classMap = util.Util_Analyse_RMP.CLASSMAP_SETTING;
+					Map<String, Class<?>> classMap = util.Util_Analyse_MetaPopulation.CLASSMAP_SETTING;
 
 					for (String key : prop.stringPropertyNames()) {
 						Matcher m = pattern_morbidity_setting.matcher(key);
@@ -85,11 +85,11 @@ public class Simulation_RMP extends Simulation_ClusterModelTransmission {
 					for (int i = 3; i < args.length; i++) {
 						if (args[i].startsWith("-simSel=")) {
 							File simSelXML = new File(sce_dir, args[i].split("=")[1]);
-							sim_sel_map = util.Util_Analyse_RMP.importSimSelMap(simSelXML);
+							sim_sel_map = util.Util_Analyse_MetaPopulation.importSimSelMap(simSelXML);
 						}
 					}
 
-					Util_Analyse_RMP.extracted_InfectHist(new File[] { sce_dir }, sce_dir, sample_time, sim_sel_map,
+					Util_Analyse_MetaPopulation.extracted_InfectHist(new File[] { sce_dir }, sce_dir, sample_time, sim_sel_map,
 							demographic, morbidity_key_arr, morbidity_setting);
 
 				} else {
