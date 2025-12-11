@@ -8,7 +8,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Map.Entry;
 import java.util.Properties;
 
 import person.AbstractIndividualInterface;
@@ -39,13 +38,11 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection_POC
 	// (int[][]) cumul_treatment_by_person
 	protected HashMap<Integer, ArrayList<Object[]>> schedule_treatment = new HashMap<>();
 
-	// Default parameter
-	private static final int NUM_INF = 4;
-	private static final int NUM_SITE = 3;
-	private static final int NUM_ACT = 1;
+	private static final int NUM_SITE_RMP_POC = 3;
+	private static final int NUM_ACT_RMP_POC = 1;
 
 	public Runnable_MetaPopulation_Transmission_RMP_MultiInfection_POC(long cMap_seed, long sim_seed, Properties prop) {
-		super(cMap_seed, sim_seed, prop, NUM_INF, NUM_SITE, NUM_ACT);
+		super(cMap_seed, sim_seed, prop, NUM_INF_RMP_POC, NUM_SITE_RMP_POC, NUM_ACT_RMP_POC);
 	}	
 	
 	@Override
@@ -419,138 +416,6 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection_POC
 			}
 		}
 
-	}
-
-	@Override
-	protected void applyTreatment(int currentTime, int infId, int pid, int[][] inf_stage) {
-
-		int[] preTreatment_stage = Arrays.copyOf(inf_stage[infId], inf_stage[infId].length);
-
-		super.applyTreatment(currentTime, infId, pid, inf_stage);
-
-		if ((simSetting & 1 << Simulation_ClusterModelTransmission.SIM_SETTING_KEY_TRACK_INFECTION_HISTORY) > 0) {
-			ArrayList<Integer> infHist = infection_history.get(pid).get(infId);
-
-			boolean nonInfected = true;
-			boolean treatment_suc = false;
-
-			for (int i = 0; i < preTreatment_stage.length; i++) {
-				nonInfected &= preTreatment_stage[i] == AbstractIndividualInterface.INFECT_S;
-				treatment_suc |= preTreatment_stage[i] >= 0 && preTreatment_stage[i] != inf_stage[infId][i];
-			}
-			if (nonInfected) {
-				infHist.add(currentTime);
-				infHist.add(currentTime);
-				infHist.add(INFECTION_HIST_OVERTREATMENT);
-			} else if (treatment_suc) {
-				if (infHist.get(infHist.size() - 1) > 0) {
-					infHist.add(currentTime);
-					infHist.add(INFECTION_HIST_CLEAR_TREATMENT);
-				} else {
-					System.err.printf("Infection history error: %s -> %s.\n", Arrays.toString(preTreatment_stage),
-							Arrays.toString(inf_stage[infId]));
-
-				}
-			}
-		}
-
-	}
-
-	@Override
-	public int addInfectious(Integer infectedPId, int infectionId, int site_id, int stage_id, int infectious_time,
-			int state_duration_adj) {
-		int res = super.addInfectious(infectedPId, infectionId, site_id, stage_id, infectious_time, state_duration_adj);
-
-		if ((simSetting & 1 << Simulation_ClusterModelTransmission.SIM_SETTING_KEY_TRACK_INFECTION_HISTORY) > 0) {
-			ArrayList<ArrayList<Integer>> hist_all = infection_history.get(infectedPId);
-			if (hist_all == null) {
-				hist_all = new ArrayList<>();
-				for (int i = 0; i < NUM_INF; i++) {
-					hist_all.add(new ArrayList<>());
-				}
-				infection_history.put(infectedPId, hist_all);
-			}
-			ArrayList<Integer> hist_by_inf = hist_all.get(infectionId);
-			// Check for new infection (i.e. previously recovered naturally or through
-			// treatment
-			if (hist_by_inf.size() == 0 || hist_by_inf.get(hist_by_inf.size() - 1) < 0) {
-				hist_by_inf.add(infectious_time);
-			}
-		}
-		return res;
-	}
-
-	@Override
-	protected int[] handleNoNextStage(Integer pid, int infection_id, int site_id, int current_infection_stage,
-			int current_time) {
-		int[] res = super.handleNoNextStage(pid, infection_id, site_id, current_infection_stage, current_time);
-		// res = {next_stage, duration}
-		if ((simSetting & 1 << Simulation_ClusterModelTransmission.SIM_SETTING_KEY_TRACK_INFECTION_HISTORY) > 0) {
-			ArrayList<Integer> infhist = infection_history.get(pid).get(infection_id);
-			if (infhist.size() > 0 && infhist.get(infhist.size() - 1) > 0) {
-				// Key=PID,V=int[INF_ID][SITE]{infection_stage}
-				int[] inf_stat = map_currrent_infection_stage.get(pid)[infection_id];
-				boolean all_clear = true;
-				for (int s = 0; s < inf_stat.length; s++) {
-					all_clear &= (s == site_id ? res[0] : inf_stat[s]) == AbstractIndividualInterface.INFECT_S;
-				}
-				if (all_clear) {
-					ArrayList<Integer> infHist = infection_history.get(pid).get(infection_id);
-					infHist.add(current_time);
-					infHist.add(INFECTION_HIST_CLEAR_NATURAL_RECOVERY);
-				}
-			}
-
-		}
-
-		return res;
-	}
-
-	@Override
-	protected double getTransmissionProb(int currentTime, int inf_id, int pid_inf_src, int pid_inf_tar,
-			int partnershiptDur, int actType, int src_site, int tar_site) {
-		if (indiv_map.get(pid_inf_src)[INDIV_MAP_CURRENT_LOC] != indiv_map.get(pid_inf_tar)[INDIV_MAP_CURRENT_LOC]) {
-			// Only possible at same location
-			return 0;
-		} else {
-			return super.getTransmissionProb(currentTime, inf_id, pid_inf_src, pid_inf_tar, partnershiptDur, actType,
-					src_site, tar_site);
-		}
-	}
-
-	protected void loadMovement(int movementUpToTime) {
-		while (lastMovement_update <= movementUpToTime) {
-			for (Entry<String, LineCollectionEntry> mvE : movementCollections.entrySet()) {
-				String[] direction = mvE.getKey().split("_");
-				while ((mvE.getValue().getCurrentLine()) != null) {
-					String[] ent = mvE.getValue().getCurrentLine().split(",");
-					if (Integer.parseInt(ent[0]) == lastMovement_update) {
-						int pid = Integer.parseInt(ent[1]);
-						int[] indiv_stat = indiv_map.get(pid);
-						int src_loc = Integer.parseInt(direction[0]);
-						int tar_loc = Integer.parseInt(direction[1]);
-						indiv_stat[INDIV_MAP_CURRENT_LOC] = tar_loc;
-						if (tar_loc != indiv_stat[INDIV_MAP_HOME_LOC]) {
-							// Moving away from home
-							ArrayList<Integer> loc_arr = visitor_pids_by_loc.get(tar_loc);
-							if (loc_arr == null) {
-								loc_arr = new ArrayList<>();
-								visitor_pids_by_loc.put(tar_loc, loc_arr);
-							}
-							loc_arr.add(~Collections.binarySearch(loc_arr, pid), pid);
-						} else {
-							// Returning home
-							ArrayList<Integer> loc_arr = visitor_pids_by_loc.get(src_loc);
-							loc_arr.remove(Collections.binarySearch(loc_arr, pid));
-						}
-						mvE.getValue().loadNextLine();
-					} else {
-						break;
-					}
-				}
-			}
-			lastMovement_update++;
-		}
 	}
 
 	protected void setAnnualTestingSchdule(int testStartTime) {
