@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 
 import util.Util_Analyse_MetaPopulation;
 
-public class Simulation_RMP_POC extends Simulation_ClusterModelTransmission {
+public class Simulation_RMP_POC extends Simulation_MetaPopulation {
 
 	public static final String PROP_BASEDIR = Simulation_MetaPopulation.PROP_BASEDIR;
 	public static final String PROP_LOC_MAP = Simulation_MetaPopulation.PROP_LOC_MAP;
@@ -98,7 +98,8 @@ public class Simulation_RMP_POC extends Simulation_ClusterModelTransmission {
 				}
 
 			} else {
-				Simulation_ClusterModelTransmission.launch(args, new Simulation_RMP_POC());
+				Simulation_RMP_POC sim = new Simulation_RMP_POC();								
+				Simulation_ClusterModelTransmission.launch(args, sim);
 			}
 		}
 
