@@ -46,17 +46,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection_POC
 
 	public Runnable_MetaPopulation_Transmission_RMP_MultiInfection_POC(long cMap_seed, long sim_seed, Properties prop) {
 		super(cMap_seed, sim_seed, prop, NUM_INF, NUM_SITE, NUM_ACT);
-	}
-
-	@Override
-	public void initialse() {
-		super.initialse();
-		// Set up age range
-		init_age_range();
-		// Set up individual map (i.e. population)
-		init_indiv_map();
-
-	}
+	}	
 	
 	@Override
 	protected void handleRemovePerson(Integer pid) {
