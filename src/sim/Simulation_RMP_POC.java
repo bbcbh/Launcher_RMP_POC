@@ -12,20 +12,20 @@ import java.util.regex.Pattern;
 
 import util.Util_Analyse_MetaPopulation;
 
-public class Simulation_RMP extends Simulation_ClusterModelTransmission {
+public class Simulation_RMP_POC extends Simulation_ClusterModelTransmission {
 
-	public static final String PROP_BASEDIR = Simulation_Gen_MetaPop.PROP_BASEDIR;
-	public static final String PROP_LOC_MAP = Simulation_Gen_MetaPop.PROP_LOC_MAP;
-	public static final String PROP_PRELOAD_FILES = Simulation_Gen_MetaPop.PROP_PRELOAD_FILES;
-	public static final String PROP_INDIV_STAT = Simulation_Gen_MetaPop.PROP_INDIV_STAT;
-	public static final String PROP_PARNTER_EXTRA_SOUGHT = Simulation_Gen_MetaPop.PROP_PARNTER_EXTRA_SOUGHT;
-	public static final String PROP_CONTACT_MAP_LOC = Simulation_Gen_MetaPop.PROP_CONTACT_MAP_LOC;
+	public static final String PROP_BASEDIR = Simulation_MetaPopulation.PROP_BASEDIR;
+	public static final String PROP_LOC_MAP = Simulation_MetaPopulation.PROP_LOC_MAP;
+	public static final String PROP_PRELOAD_FILES = Simulation_MetaPopulation.PROP_PRELOAD_FILES;
+	public static final String PROP_INDIV_STAT = Simulation_MetaPopulation.PROP_INDIV_STAT;
+	public static final String PROP_PARNTER_EXTRA_SOUGHT = Simulation_MetaPopulation.PROP_PARNTER_EXTRA_SOUGHT;
+	public static final String PROP_CONTACT_MAP_LOC = Simulation_MetaPopulation.PROP_CONTACT_MAP_LOC;
 
 	public static void main(String[] args) throws IOException, InterruptedException {
 		final String USAGE_INFO = String.format(
 				"Usage: java %s PROP_FILE_DIRECTORY " + "<-export_skip_backup> <-printProgress> <-seedMap=SEED_MAP>\n"
 						+ "  or java %s -analyse PROP_FILE_DIRECTORY SETTING_XML <-simSel=SIM_SEL_XML>",
-				Simulation_RMP.class.getName(), Simulation_RMP.class.getName());
+				Simulation_RMP_POC.class.getName(), Simulation_RMP_POC.class.getName());
 
 		if (args.length < 1) {
 			System.out.println(USAGE_INFO);
@@ -98,7 +98,7 @@ public class Simulation_RMP extends Simulation_ClusterModelTransmission {
 				}
 
 			} else {
-				Simulation_ClusterModelTransmission.launch(args, new Simulation_RMP());
+				Simulation_ClusterModelTransmission.launch(args, new Simulation_RMP_POC());
 			}
 		}
 
@@ -107,7 +107,7 @@ public class Simulation_RMP extends Simulation_ClusterModelTransmission {
 	@Override
 	public Abstract_Runnable_ClusterModel_Transmission generateDefaultRunnable(long cMap_seed, long sim_seed,
 			Properties loadProperties) {
-		Abstract_Runnable_MetaPopulation_Transmission_RMP_MultiInfection run_trans = new Runnable_MetaPopulation_Transmission_RMP_MultiInfection_POC(
+		Runnable_MetaPopulation_MultiTransmission run_trans = new Runnable_MetaPopulation_Transmission_RMP_MultiInfection_POC(
 				cMap_seed, sim_seed, loadedProperties);
 
 		return run_trans;
