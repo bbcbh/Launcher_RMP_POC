@@ -190,7 +190,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection_POC
 	}
 
 	@Override
-	protected void testPerson(int currentTime, int pid_t, int infIncl, int siteIncl,
+	public void testPerson(int currentTime, int pid_t, int infIncl, int siteIncl,
 			int[][] cumul_treatment_by_person) {
 		ArrayList<Integer> tested_positive = new ArrayList<>();
 
