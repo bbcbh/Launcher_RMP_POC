@@ -73,7 +73,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection_POC
 				int pid = int_stat[1];
 				int[][] cumul_treatment_by_person = (int[][]) ent[1];
 				cumul_treatment_by_person[infId][getPersonGrp(pid)]++;
-				applyTreatment(currentTime, infId, pid, map_currrent_infection_stage.get(pid));
+				applyTreatment(currentTime, infId, pid, map_current_infection_stage.get(pid));
 			}
 		}
 		// Movement
@@ -236,7 +236,7 @@ public class Runnable_MetaPopulation_Transmission_RMP_MultiInfection_POC
 					}
 				}
 			} else {
-				int[][] inf_stage = map_currrent_infection_stage.get(pid);
+				int[][] inf_stage = map_current_infection_stage.get(pid);
 
 				final int offset_num_delay_option = 1;
 				final int offset_num_delay_range = offset_num_delay_option + 1;
